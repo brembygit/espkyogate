@@ -119,23 +119,19 @@ ZONE_SENSOR_SCHEMA = binary_sensor.binary_sensor_schema(
         cv.Optional(CONF_ZONE_TYPE): text_sensor.text_sensor_schema(
             icon="mdi:shield-alert-outline",
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            disabled_by_default=True,
-        ),
+        ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
         cv.Optional(CONF_PANEL_NAME): text_sensor.text_sensor_schema(
             icon="mdi:form-textbox",
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            disabled_by_default=True,
-        ),
+        ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
         cv.Optional(CONF_ZONE_PARTITION): text_sensor.text_sensor_schema(
             icon="mdi:shield-home-outline",
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            disabled_by_default=True,
-        ),
+        ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
         cv.Optional(CONF_ZONE_SERIAL_NUMBER): text_sensor.text_sensor_schema(
             icon="mdi:identifier",
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            disabled_by_default=True,
-        ),
+        ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
     }
 )
 
@@ -196,8 +192,7 @@ OUTPUT_STATE_SENSOR_SCHEMA = binary_sensor.binary_sensor_schema(
         cv.Optional(CONF_OUTPUT_PANEL_NAME): text_sensor.text_sensor_schema(
             icon="mdi:form-textbox",
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            disabled_by_default=True,
-        ),
+        ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
     }
 )
 

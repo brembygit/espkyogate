@@ -46,18 +46,15 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_ENTRY_DELAY): text_sensor.text_sensor_schema(
                 icon="mdi:timer-sand",
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-                disabled_by_default=True,
-            ),
+            ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
             cv.Optional(CONF_EXIT_DELAY): text_sensor.text_sensor_schema(
                 icon="mdi:timer-sand",
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-                disabled_by_default=True,
-            ),
+            ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
             cv.Optional(CONF_SIREN_TIMER): text_sensor.text_sensor_schema(
                 icon="mdi:timer-alert",
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-                disabled_by_default=True,
-            ),
+            ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
         }
     )
     .extend(cv.COMPONENT_SCHEMA),

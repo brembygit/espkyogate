@@ -29,35 +29,34 @@ TextSensorType = bentel_kyo_ns.enum("TextSensorType")
 PARTITION_NAME_SCHEMA = text_sensor.text_sensor_schema(
     icon="mdi:form-textbox",
     entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-    disabled_by_default=True,
 ).extend(
     {
         cv.Required(CONF_PARTITION): cv.int_range(min=1, max=8),
+        cv.Optional("disabled_by_default", default=True): cv.boolean,
     }
 )
 
 CODE_NAME_SCHEMA = text_sensor.text_sensor_schema(
     icon="mdi:form-textbox",
     entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-    disabled_by_default=True,
 ).extend(
     {
         cv.Required(CONF_CODE): cv.int_range(min=1, max=24),
+        cv.Optional("disabled_by_default", default=True): cv.boolean,
     }
 )
 
 KEYFOB_SCHEMA = text_sensor.text_sensor_schema(
     icon="mdi:key-wireless",
     entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-    disabled_by_default=True,
 ).extend(
     {
         cv.Required(CONF_SLOT): cv.int_range(min=1, max=16),
         cv.Optional(CONF_PANEL_NAME): text_sensor.text_sensor_schema(
             icon="mdi:form-textbox",
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            disabled_by_default=True,
-        ),
+        ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
+        cv.Optional("disabled_by_default", default=True): cv.boolean,
     }
 )
 
@@ -67,26 +66,22 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_FIRMWARE_VERSION): text_sensor.text_sensor_schema(
             icon="mdi:tag",
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            disabled_by_default=True,
-        ),
+        ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
         cv.Optional(CONF_ALARM_MODEL): text_sensor.text_sensor_schema(
             icon="mdi:shield-check",
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            disabled_by_default=True,
-        ),
+        ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
         cv.Optional(CONF_KEYFOBS): cv.ensure_list(KEYFOB_SCHEMA),
         cv.Optional(CONF_PARTITIONS): cv.ensure_list(PARTITION_NAME_SCHEMA),
         cv.Optional(CONF_CODES): cv.ensure_list(CODE_NAME_SCHEMA),
         cv.Optional(CONF_PANEL_MODE_RAW): text_sensor.text_sensor_schema(
             icon="mdi:cog-transfer",
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            disabled_by_default=True,
-        ),
+        ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
         cv.Optional(CONF_STATUS_FLAGS_RAW): text_sensor.text_sensor_schema(
             icon="mdi:alert-circle-outline",
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            disabled_by_default=True,
-        ),
+        ).extend({cv.Optional("disabled_by_default", default=True): cv.boolean}),
     }
 )
 

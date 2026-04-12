@@ -1,4 +1,4 @@
-"""Bentel KYO button platform — reread config, arm/disarm all, arm presets."""
+"""Bentel KYO button platform — reread config, arm/disarm all, arm presets, output control, zone control, datetime sync."""
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
@@ -31,8 +31,35 @@ BentelKyoReadEventLogButton = bentel_kyo_ns.class_(
     "BentelKyoReadEventLogButton", button.Button, cg.Component
 )
 
+BentelKyoActivateOutputButton = bentel_kyo_ns.class_(
+    "BentelKyoActivateOutputButton", button.Button, cg.Component
+)
+
+BentelKyoDeactivateOutputButton = bentel_kyo_ns.class_(
+    "BentelKyoDeactivateOutputButton", button.Button, cg.Component
+)
+
+BentelKyoPulseOutputButton = bentel_kyo_ns.class_(
+    "BentelKyoPulseOutputButton", button.Button, cg.Component
+)
+
+BentelKyoIncludeZoneButton = bentel_kyo_ns.class_(
+    "BentelKyoIncludeZoneButton", button.Button, cg.Component
+)
+
+BentelKyoExcludeZoneButton = bentel_kyo_ns.class_(
+    "BentelKyoExcludeZoneButton", button.Button, cg.Component
+)
+
+BentelKyoSyncDatetimeButton = bentel_kyo_ns.class_(
+    "BentelKyoSyncDatetimeButton", button.Button, cg.Component
+)
+
 CONF_ARM_TYPE = "arm_type"
 CONF_PARTITIONS = "partitions"
+CONF_OUTPUT_NUMBER = "output_number"
+CONF_PULSE_TIME = "pulse_time"
+CONF_ZONE_NUMBER = "zone_number"
 
 BUTTON_TYPES = {
     "reread_config": (BentelKyoRereadConfigButton, "mdi:refresh", ENTITY_CATEGORY_CONFIG),
@@ -43,6 +70,12 @@ BUTTON_TYPES = {
     "arm_preset": (BentelKyoArmPresetButton, "mdi:shield-account", None),
     "reset_alarms": (BentelKyoResetAlarmsButton, "mdi:bell-cancel", None),
     "read_event_log": (BentelKyoReadEventLogButton, "mdi:history", ENTITY_CATEGORY_CONFIG),
+    "activate_output": (BentelKyoActivateOutputButton, "mdi:electric-switch", None),
+    "deactivate_output": (BentelKyoDeactivateOutputButton, "mdi:electric-switch-closed", None),
+    "pulse_output": (BentelKyoPulseOutputButton, "mdi:pulse", None),
+    "include_zone": (BentelKyoIncludeZoneButton, "mdi:shield-plus", None),
+    "exclude_zone": (BentelKyoExcludeZoneButton, "mdi:shield-minus", None),
+    "sync_datetime": (BentelKyoSyncDatetimeButton, "mdi:clock-check", ENTITY_CATEGORY_CONFIG),
 }
 
 ARM_TYPE_MAP = {
@@ -98,6 +131,28 @@ def _button_schema(type_str):
             }
         )
 
+    if type_str in ("activate_output", "deactivate_output"):
+        base = base.extend(
+            {
+                cv.Required(CONF_OUTPUT_NUMBER): cv.int_range(min=1, max=8),
+            }
+        )
+
+    if type_str == "pulse_output":
+        base = base.extend(
+            {
+                cv.Required(CONF_OUTPUT_NUMBER): cv.int_range(min=1, max=8),
+                cv.Optional(CONF_PULSE_TIME, default="1000ms"): cv.positive_time_period_milliseconds,
+            }
+        )
+
+    if type_str in ("include_zone", "exclude_zone"):
+        base = base.extend(
+            {
+                cv.Required(CONF_ZONE_NUMBER): cv.int_range(min=1, max=32),
+            }
+        )
+
     return base
 
 
@@ -131,3 +186,10 @@ async def to_code(config):
                 partial_d0 |= bit
             # "disarm" — bit stays 0 in all masks
         cg.add(var.set_masks(total, partial, partial_d0))
+    elif type_str in ("activate_output", "deactivate_output"):
+        cg.add(var.set_output_number(config[CONF_OUTPUT_NUMBER]))
+    elif type_str == "pulse_output":
+        cg.add(var.set_output_number(config[CONF_OUTPUT_NUMBER]))
+        cg.add(var.set_pulse_time(int(config[CONF_PULSE_TIME])))
+    elif type_str in ("include_zone", "exclude_zone"):
+        cg.add(var.set_zone_number(config[CONF_ZONE_NUMBER]))

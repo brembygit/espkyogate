@@ -14,7 +14,6 @@ namespace bentel_kyo {
 
 // Static constexpr definitions
 constexpr uint8_t BentelKyo::CMD_GET_SENSOR_STATUS[];
-constexpr uint8_t BentelKyo::CMD_GET_PARTITION_KYO32G[];
 constexpr uint8_t BentelKyo::CMD_GET_PARTITION_KYO32[];
 constexpr uint8_t BentelKyo::CMD_GET_PARTITION_KYO8[];
 constexpr uint8_t BentelKyo::CMD_GET_VERSION[];
@@ -58,6 +57,12 @@ void BentelKyo::send_command_async_(const uint8_t *cmd, int cmd_len, uint8_t pen
   while (this->available() > 0)
     this->read();
 
+  // Log serial trace if enabled
+  if (this->serial_trace_) {
+    ESP_LOGI(TAG, "TX [%d bytes]: %s", cmd_len,
+             format_hex_pretty(cmd, cmd_len).c_str());
+  }
+
   // Send command bytes (fast: ~7ms for 6 bytes at 9600 baud)
   this->write_array(cmd, cmd_len);
 
@@ -76,6 +81,13 @@ void BentelKyo::send_command_async_(const uint8_t *cmd, int cmd_len, uint8_t pen
 // ========================================
 
 void BentelKyo::loop() {
+  // Handle non-blocking pulse output timer
+  if (this->pulse_output_number_ > 0 && millis() >= this->pulse_output_end_ms_) {
+    uint8_t out = this->pulse_output_number_;
+    this->pulse_output_number_ = 0;
+    this->deactivate_output(out);
+  }
+
   if (!this->polling_enabled_ || this->serial_state_ != SerialState::WAITING_RESPONSE)
     return;
 
@@ -99,6 +111,12 @@ void BentelKyo::loop() {
   this->serial_state_ = SerialState::IDLE;
   int count = this->serial_rx_index_;
 
+  // Log serial trace if enabled
+  if (this->serial_trace_ && count > 0) {
+    ESP_LOGI(TAG, "RX [%d bytes]: %s", count,
+             format_hex_pretty(this->serial_rx_buf_, count).c_str());
+  }
+
   if (count <= 0) {
     // No data at all — panel not responding
     ESP_LOGD(TAG, "No answer from serial port (op=%d)", this->serial_pending_op_);
@@ -114,7 +132,7 @@ void BentelKyo::loop() {
       if (ok) {
         // Immediately poll sensor+partition status so alarm panels get real state
         // before config reads start (otherwise panels default to DISARMED for ~75s)
-        this->send_command_async_(CMD_GET_SENSOR_STATUS, sizeof(CMD_GET_SENSOR_STATUS), 1, 80);
+        this->send_command_async_(CMD_GET_SENSOR_STATUS, sizeof(CMD_GET_SENSOR_STATUS), 1);
         return;  // Don't update health yet — wait for sensor+partition response
       }
       break;
@@ -124,15 +142,14 @@ void BentelKyo::loop() {
         // Chain: immediately send partition status query
         const uint8_t *cmd;
         int cmd_len;
-        if (this->alarm_model_ == AlarmModel::KYO_32G) {
-          cmd = CMD_GET_PARTITION_KYO32G; cmd_len = sizeof(CMD_GET_PARTITION_KYO32G);
-        } else if (this->alarm_model_ == AlarmModel::KYO_8 || this->alarm_model_ == AlarmModel::KYO_4 ||
-                   this->alarm_model_ == AlarmModel::KYO_8G || this->alarm_model_ == AlarmModel::KYO_8W) {
+        if (this->alarm_model_ == AlarmModel::KYO_8 || this->alarm_model_ == AlarmModel::KYO_4 ||
+            this->alarm_model_ == AlarmModel::KYO_8G || this->alarm_model_ == AlarmModel::KYO_8W) {
           cmd = CMD_GET_PARTITION_KYO8; cmd_len = sizeof(CMD_GET_PARTITION_KYO8);
         } else {
+          // Both KYO32 and KYO32G use the same partition command
           cmd = CMD_GET_PARTITION_KYO32; cmd_len = sizeof(CMD_GET_PARTITION_KYO32);
         }
-        this->send_command_async_(cmd, cmd_len, 2, 80);
+        this->send_command_async_(cmd, cmd_len, 2);
         return;  // Don't update health yet — wait for partition response
       }
       break;
@@ -219,7 +236,7 @@ void BentelKyo::update() {
 
   // If model not yet detected, send version query
   if (!this->model_detected_) {
-    this->send_command_async_(CMD_GET_VERSION, sizeof(CMD_GET_VERSION), 0, 80);
+    this->send_command_async_(CMD_GET_VERSION, sizeof(CMD_GET_VERSION), 0);
     return;
   }
 
@@ -277,7 +294,7 @@ void BentelKyo::update() {
   }
 
   // Normal polling: send sensor status query (partition query chains from loop())
-  this->send_command_async_(CMD_GET_SENSOR_STATUS, sizeof(CMD_GET_SENSOR_STATUS), 1, 80);
+  this->send_command_async_(CMD_GET_SENSOR_STATUS, sizeof(CMD_GET_SENSOR_STATUS), 1);
 
   // Publish communication status
   for (auto &entry : this->binary_sensors_) {
@@ -308,9 +325,18 @@ void BentelKyo::register_text_sensor(text_sensor::TextSensor *sensor, TextSensor
 // ========================================
 
 bool BentelKyo::detect_alarm_model_(const uint8_t *rx, int count) {
+  // Some models (notably KYO32 non-G) don't support the version command and
+  // return only the echo (6 bytes). In that case, we'll detect the model later
+  // from the sensor status response length (see parse_sensor_status_).
+  if (count <= 6) {
+    ESP_LOGI(TAG, "Version query returned only %d bytes (echo only) — will detect model from sensor response", count);
+    // Mark model as not detected but don't treat as error — let sensor status detection handle it
+    this->model_detected_ = false;
+    return true;  // Return true to avoid failure count, detection will happen via sensor response
+  }
+
   if (count < RESP_VERSION) {
-    ESP_LOGW(TAG, "Version query returned %d bytes", count);
-    return false;
+    ESP_LOGW(TAG, "Version query returned %d bytes (expected %d), attempting partial parse", count, RESP_VERSION);
   }
 
   // Extract firmware string from rx[6..17] (12 chars)
@@ -396,16 +422,29 @@ bool BentelKyo::parse_sensor_status_(const uint8_t *rx, int count) {
         this->alarm_model_ = AlarmModel::KYO_32;
         this->max_zones_ = KYO_MAX_ZONES;
         is_kyo8 = false;
-        ESP_LOGW(TAG, "Model not detected via firmware, defaulting to KYO32 (18-byte response)");
+        ESP_LOGI(TAG, "Detected KYO32 from sensor response length (18 bytes)");
         break;
       case RESP_SENSOR_KYO8:
         this->alarm_model_ = AlarmModel::KYO_8;
         this->max_zones_ = KYO_MAX_ZONES_8;
         is_kyo8 = true;
+        ESP_LOGI(TAG, "Detected KYO8 from sensor response length (12 bytes)");
         break;
       default:
         ESP_LOGE(TAG, "Sensor status: invalid response length %d", count);
         return false;
+    }
+    this->model_detected_ = true;
+
+    // Publish alarm model text sensor
+    if (this->alarm_model_sensor_ != nullptr) {
+      const char *model_name;
+      switch (this->alarm_model_) {
+        case AlarmModel::KYO_32: model_name = "KYO32"; break;
+        case AlarmModel::KYO_8: model_name = "KYO8"; break;
+        default: model_name = "Unknown"; break;
+      }
+      this->alarm_model_sensor_->publish_state(model_name);
     }
   }
 
@@ -638,6 +677,14 @@ void BentelKyo::publish_binary_sensors_() {
         continue;
     }
 
+    // Log state changes when log_trace is enabled
+    if (this->log_trace_ && state != entry.sensor->state) {
+      ESP_LOGI(TAG, "State change: %s [idx=%d] %s -> %s",
+               entry.sensor->get_name().c_str(), idx,
+               entry.sensor->state ? "ON" : "OFF",
+               state ? "ON" : "OFF");
+    }
+
     entry.sensor->publish_state(state);
   }
 }
@@ -816,6 +863,22 @@ void BentelKyo::deactivate_output(uint8_t output_number) {
   this->send_message_(cmd, sizeof(cmd), rx, 250);
 }
 
+void BentelKyo::pulse_output(uint8_t output_number, uint32_t pulse_time_ms) {
+  if (output_number < 1 || output_number > 8) {
+    ESP_LOGE(TAG, "Invalid output %d (1-8)", output_number);
+    return;
+  }
+  if (pulse_time_ms < 50 || pulse_time_ms > 30000) {
+    ESP_LOGE(TAG, "Invalid pulse time %lu ms (50-30000)", (unsigned long) pulse_time_ms);
+    return;
+  }
+
+  ESP_LOGI(TAG, "Pulse output %d for %lu ms", output_number, (unsigned long) pulse_time_ms);
+  this->activate_output(output_number);
+  this->pulse_output_number_ = output_number;
+  this->pulse_output_end_ms_ = millis() + pulse_time_ms;
+}
+
 void BentelKyo::include_zone(uint8_t zone_number) {
   if (zone_number < 1 || zone_number > this->max_zones_) {
     ESP_LOGE(TAG, "Invalid zone %d (1-%d)", zone_number, this->max_zones_);
@@ -898,6 +961,20 @@ void BentelKyo::update_datetime(uint8_t day, uint8_t month, uint16_t year,
   this->send_message_(cmd, sizeof(cmd), rx, 300);
 }
 
+void BentelKyo::sync_datetime_from_ntp() {
+  // Use ESPHome's built-in RealTimeClock to get current time
+  auto now = ESPTime::now();
+  if (!now.is_valid()) {
+    ESP_LOGW(TAG, "NTP time not available yet, cannot sync datetime");
+    return;
+  }
+
+  ESP_LOGI(TAG, "Syncing panel datetime from NTP: %02d/%02d/%04d %02d:%02d:%02d",
+           now.day_of_month, now.month, now.year, now.hour, now.minute, now.second);
+  this->update_datetime(now.day_of_month, now.month, now.year,
+                        now.hour, now.minute, now.second);
+}
+
 // ========================================
 // Serial I/O
 // ========================================
@@ -927,6 +1004,10 @@ int BentelKyo::send_message_(const uint8_t *cmd, int cmd_len, uint8_t *response,
   }
 
   // Send command
+  if (this->serial_trace_) {
+    ESP_LOGI(TAG, "TX [%d bytes]: %s", cmd_len,
+             format_hex_pretty(cmd, cmd_len).c_str());
+  }
   this->write_array(cmd, cmd_len);
 
   // Non-blocking read with inter-byte silence detection
@@ -967,6 +1048,12 @@ int BentelKyo::send_message_(const uint8_t *cmd, int cmd_len, uint8_t *response,
   }
 
   memcpy(response, rx_buf, index);
+
+  if (this->serial_trace_) {
+    ESP_LOGI(TAG, "RX [%d bytes]: %s", index,
+             format_hex_pretty(rx_buf, index).c_str());
+  }
+
   return index;
 }
 

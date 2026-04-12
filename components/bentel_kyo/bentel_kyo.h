@@ -10,6 +10,7 @@
 
 #include "esphome/core/component.h"
 #include "esphome/core/log.h"
+#include "esphome/core/time.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
@@ -40,8 +41,8 @@ static const int RESP_VERSION = 19;
 
 // Communication health
 static const int MAX_INVALID_COUNT = 3;
-static const uint32_t SERIAL_TIMEOUT_MS = 250;
-static const uint32_t INTER_BYTE_SILENCE_MS = 10;
+static const uint32_t SERIAL_TIMEOUT_MS = 300;
+static const uint32_t INTER_BYTE_SILENCE_MS = 20;
 
 enum class AlarmModel : uint8_t {
   UNKNOWN = 0,
@@ -143,14 +144,22 @@ class BentelKyo : public PollingComponent, public uart::UARTDevice {
   void read_event_log();
   void activate_output(uint8_t output_number);
   void deactivate_output(uint8_t output_number);
+  void pulse_output(uint8_t output_number, uint32_t pulse_time_ms);
   void include_zone(uint8_t zone_number);
   void exclude_zone(uint8_t zone_number);
   void update_datetime(uint8_t day, uint8_t month, uint16_t year,
                        uint8_t hours, uint8_t minutes, uint8_t seconds);
+  void sync_datetime_from_ntp();
 
   // Polling control
   void set_polling_enabled(bool enabled);
   bool is_polling_enabled() const { return this->polling_enabled_; }
+
+  // Debug trace control
+  void set_serial_trace(bool enabled) { this->serial_trace_ = enabled; }
+  bool is_serial_trace_enabled() const { return this->serial_trace_; }
+  void set_log_trace(bool enabled) { this->log_trace_ = enabled; }
+  bool is_log_trace_enabled() const { return this->log_trace_; }
 
   // Re-read panel configuration registers
   void reread_config();
@@ -160,8 +169,7 @@ class BentelKyo : public PollingComponent, public uart::UARTDevice {
  protected:
   // Protocol commands
   static constexpr uint8_t CMD_GET_SENSOR_STATUS[6] = {0xF0, 0x04, 0xF0, 0x0A, 0x00, 0xEE};
-  static constexpr uint8_t CMD_GET_PARTITION_KYO32G[6] = {0xF0, 0x02, 0x15, 0x12, 0x00, 0x19};
-  static constexpr uint8_t CMD_GET_PARTITION_KYO32[6] = {0xF0, 0xEC, 0x14, 0x12, 0x00, 0x02};
+  static constexpr uint8_t CMD_GET_PARTITION_KYO32[6] = {0xF0, 0x02, 0x15, 0x12, 0x00, 0x19};
   static constexpr uint8_t CMD_GET_PARTITION_KYO8[6] = {0xF0, 0x68, 0x0E, 0x09, 0x00, 0x6F};
   static constexpr uint8_t CMD_GET_VERSION[6] = {0xF0, 0x00, 0x00, 0x0B, 0x00, 0xFB};
   static constexpr uint8_t CMD_RESET_ALARMS[9] = {0x0F, 0x05, 0xF0, 0x01, 0x00, 0x05, 0xFF, 0x00, 0xFF};
@@ -170,7 +178,7 @@ class BentelKyo : public PollingComponent, public uart::UARTDevice {
   bool detect_alarm_model_(const uint8_t *rx, int count);
   bool parse_sensor_status_(const uint8_t *rx, int count);
   bool parse_partition_status_(const uint8_t *rx, int count);
-  void send_command_async_(const uint8_t *cmd, int cmd_len, uint8_t pending_op, uint32_t timeout_ms = 80);
+  void send_command_async_(const uint8_t *cmd, int cmd_len, uint8_t pending_op, uint32_t timeout_ms = 200);
   void handle_serial_failure_();
   int send_message_(const uint8_t *cmd, int cmd_len, uint8_t *response, uint32_t timeout_ms = SERIAL_TIMEOUT_MS);
   int read_register_(uint16_t address, uint8_t length, uint8_t *response, uint32_t timeout_ms = SERIAL_TIMEOUT_MS);
@@ -227,6 +235,14 @@ class BentelKyo : public PollingComponent, public uart::UARTDevice {
 
   // Polling control
   bool polling_enabled_{true};
+
+  // Debug trace flags (toggled at runtime via switches)
+  bool serial_trace_{false};  // log TX/RX hex on serial commands
+  bool log_trace_{false};     // log state changes (zone, partition, etc.)
+
+  // Pulse output state (non-blocking timer-based)
+  uint8_t pulse_output_number_{0};     // 0 = no pulse pending
+  uint32_t pulse_output_end_ms_{0};    // millis() when pulse should end
 
   // Communication health and backoff
   bool communication_ok_{false};

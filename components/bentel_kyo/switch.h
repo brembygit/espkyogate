@@ -31,5 +31,39 @@ class BentelKyoPollingSwitch : public switch_::Switch, public Component {
   BentelKyo *parent_{nullptr};
 };
 
+class BentelKyoSerialTraceSwitch : public switch_::Switch, public Component {
+ public:
+  void set_parent(BentelKyo *parent) { this->parent_ = parent; }
+
+  void setup() override {
+    this->publish_state(this->parent_->is_serial_trace_enabled());
+  }
+
+  void write_state(bool state) override {
+    this->parent_->set_serial_trace(state);
+    this->publish_state(state);
+  }
+
+ protected:
+  BentelKyo *parent_{nullptr};
+};
+
+class BentelKyoLogTraceSwitch : public switch_::Switch, public Component {
+ public:
+  void set_parent(BentelKyo *parent) { this->parent_ = parent; }
+
+  void setup() override {
+    this->publish_state(this->parent_->is_log_trace_enabled());
+  }
+
+  void write_state(bool state) override {
+    this->parent_->set_log_trace(state);
+    this->publish_state(state);
+  }
+
+ protected:
+  BentelKyo *parent_{nullptr};
+};
+
 }  // namespace bentel_kyo
 }  // namespace esphome

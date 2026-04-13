@@ -16,6 +16,7 @@ namespace bentel_kyo {
 // Static constexpr definitions
 constexpr uint8_t BentelKyo::CMD_GET_SENSOR_STATUS[];
 constexpr uint8_t BentelKyo::CMD_GET_PARTITION_KYO32[];
+constexpr uint8_t BentelKyo::CMD_GET_PARTITION_KYO32G[];
 constexpr uint8_t BentelKyo::CMD_GET_PARTITION_KYO8[];
 constexpr uint8_t BentelKyo::CMD_GET_VERSION[];
 constexpr uint8_t BentelKyo::CMD_RESET_ALARMS[];
@@ -83,10 +84,11 @@ void BentelKyo::send_command_async_(const uint8_t *cmd, int cmd_len, uint8_t pen
 
 void BentelKyo::loop() {
   // Handle non-blocking pulse output timer
-  if (this->pulse_output_number_ > 0 && millis() >= this->pulse_output_end_ms_) {
-    uint8_t out = this->pulse_output_number_;
-    this->pulse_output_number_ = 0;
-    this->deactivate_output(out);
+  for (int i = 0; i < KYO_MAX_OUTPUTS; i++) {
+    if (this->pulse_output_end_ms_[i] > 0 && millis() >= this->pulse_output_end_ms_[i]) {
+      this->pulse_output_end_ms_[i] = 0;
+      this->deactivate_output(i + 1);
+    }
   }
 
   if (!this->polling_enabled_ || this->serial_state_ != SerialState::WAITING_RESPONSE)
@@ -880,8 +882,8 @@ void BentelKyo::pulse_output(uint8_t output_number, uint32_t pulse_time_ms) {
 
   ESP_LOGI(TAG, "Pulse output %d for %lu ms", output_number, (unsigned long) pulse_time_ms);
   this->activate_output(output_number);
-  this->pulse_output_number_ = output_number;
-  this->pulse_output_end_ms_ = millis() + pulse_time_ms;
+  uint32_t end_ms = millis() + pulse_time_ms;
+  this->pulse_output_end_ms_[output_number - 1] = end_ms == 0 ? 1 : end_ms;
 }
 
 void BentelKyo::include_zone(uint8_t zone_number) {

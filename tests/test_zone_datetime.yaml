@@ -1,0 +1,77 @@
+# Test: Zone control and datetime sync buttons
+# Validates: include_zone, exclude_zone, sync_datetime buttons compile
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [bentel_kyo]
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+    version: recommended
+
+esphome:
+  name: test-zone-datetime
+  friendly_name: Test Zone and Datetime Control
+
+uart:
+  id: uart_bus
+  tx_pin: GPIO5
+  rx_pin: GPIO4
+  baud_rate: 9600
+  data_bits: 8
+  parity: EVEN
+
+logger:
+  level: DEBUG
+  baud_rate: 0
+
+api:
+
+ota:
+  platform: esphome
+
+wifi:
+  ssid: "test_ssid"
+  password: "test_password"
+
+# NTP time source (required for sync_datetime)
+time:
+  - platform: sntp
+    id: sntp_time
+
+bentel_kyo:
+  id: kyo
+  uart_id: uart_bus
+
+button:
+  # Zone include/exclude — edge zones
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: include_zone
+    zone_number: 1
+    name: "Include Zone 1"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: include_zone
+    zone_number: 32
+    name: "Include Zone 32"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: exclude_zone
+    zone_number: 1
+    name: "Exclude Zone 1"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: exclude_zone
+    zone_number: 16
+    name: "Exclude Zone 16"
+
+  # Datetime sync
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: sync_datetime
+    name: "Sync Panel Clock"

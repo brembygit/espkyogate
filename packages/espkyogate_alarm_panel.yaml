@@ -85,41 +85,49 @@ template:
         # Require code to arm the alarm (set to false for no code on arm)
         code_arm_required: true
 
-        # ARM NIGHT: Arms only Area 1 (perimeter)
+        # ARM NIGHT: Arms only Area 1 (perimeter) and disarms Area 2
         arm_night:
           - condition: template
             value_template: !secret alarmcode
-          - action: esphome.espkyogate_arm_area
+          - action: alarm_control_panel.alarm_disarm
+            target:
+              entity_id: alarm_control_panel.espkyogate_partition_2
             data:
-              arm_type: 1        # 1 = Total arm, 2 = Partial arm
-              area: *area_1      # Uses area_1_number variable
-              specific_area: 0   # 0 = arm this area and disarm others
+              code: !secret alarmcode
+          - action: alarm_control_panel.alarm_arm_away
+            target:
+              entity_id: alarm_control_panel.espkyogate_partition_1
+            data:
+              code: !secret alarmcode
 
         # ARM AWAY: Arms both Area 1 and Area 2 (full protection)
         arm_away:
           - condition: template
             value_template: !secret alarmcode
-          - action: esphome.espkyogate_arm_area
+          - action: alarm_control_panel.alarm_arm_away
+            target:
+              entity_id: alarm_control_panel.espkyogate_partition_1
             data:
-              arm_type: 1        # 1 = Total arm, 2 = Partial arm
-              area: *area_1      # Uses area_1_number variable
-              specific_area: 0   # Arm this area and disarm others
+              code: !secret alarmcode
           - delay:
               seconds: 2         # Wait for area 1 to be armed
-          - action: esphome.espkyogate_arm_area
+          - action: alarm_control_panel.alarm_arm_away
+            target:
+              entity_id: alarm_control_panel.espkyogate_partition_2
             data:
-              arm_type: 1        # 1 = Total arm, 2 = Partial arm
-              area: *area_2      # Uses area_2_number variable
-              specific_area: 1   # Arm only this area without changing others
+              code: !secret alarmcode
 
         # DISARM: Disarms all areas
         disarm:
           - condition: template
             value_template: !secret alarmcode
-          - action: esphome.espkyogate_disarm_area
+          - action: alarm_control_panel.alarm_disarm
+            target:
+              entity_id: 
+                - alarm_control_panel.espkyogate_partition_1
+                - alarm_control_panel.espkyogate_partition_2
             data:
-              area: 0            # 0 = all areas
-              specific_area: 0   # 0 = disarm all areas
+              code: !secret alarmcode
 
 # ============================================================================
 # OPTIONAL: ZONE EXCLUSION SWITCHES
@@ -135,22 +143,22 @@ template:
 #         unique_id: espkyogate_exclude_zone_1
 #         state: "{{ is_state('binary_sensor.espkyogate_escl_zona_1', 'on') }}"
 #         turn_on:
-#           - action: esphome.espkyogate_exclude_zone
-#             data:
-#               zone_number: *zone_1    # Uses zone_1_number variable
+#           - action: button.press
+#             target:
+#               entity_id: button.espkyogate_exclude_zone_1
 #         turn_off:
-#           - action: esphome.espkyogate_include_zone
-#             data:
-#               zone_number: *zone_1    # Uses zone_1_number variable
+#           - action: button.press
+#             target:
+#               entity_id: button.espkyogate_include_zone_1
 #
 #       - name: "Esclusione Zona 2"
 #         unique_id: espkyogate_exclude_zone_2
 #         state: "{{ is_state('binary_sensor.espkyogate_escl_zona_2', 'on') }}"
 #         turn_on:
-#           - action: esphome.espkyogate_exclude_zone
-#             data:
-#               zone_number: *zone_2    # Uses zone_2_number variable
+#           - action: button.press
+#             target:
+#               entity_id: button.espkyogate_exclude_zone_2
 #         turn_off:
-#           - action: esphome.espkyogate_include_zone
-#             data:
-#               zone_number: *zone_2    # Uses zone_2_number variable
+#           - action: button.press
+#             target:
+#               entity_id: button.espkyogate_include_zone_2

@@ -5,6 +5,8 @@
 
 A proper [ESPHome external component](https://esphome.io/components/external_components.html) for **Bentel Security KYO alarm panels**, based on ESP32 and communicating over RS-232 serial via a MAX3232 level shifter.
 
+> [!WARNING]  
+> **BREAKING CHANGE (v2026.4.13)**: The project has been completely overhauled and migrated into a native ESPHome component! If you were using the previous version with the custom `esphome.espkyogate_*` services, please note that those are no longer compatible. You will need to update your ESPHome YAML and Home Assistant package configuration to use the new native `alarm_control_panel`, `button`, and `binary_sensor` entities.
 > **Warning**
 > This software was developed by analyzing serial messages from/to the panel. It is not sponsored or officially supported by **Bentel**.
 
@@ -39,6 +41,8 @@ I strongly recommend using an **ESP32** Based board, like this one https://it.al
 Model detection is automatic via firmware version query on first connection.
 
 ## Features
+
+<img src="images/HomeAssistant-Lovelace.png" alt="Home Assistant Dashboard" width="450px"/>
 
 - **Alarm Control Panel** entities per partition (arm away, arm home, arm night, disarm) with full Home Assistant integration
 - **Binary sensors** for zones, zone tamper, zone bypass, alarm memory, tamper memory, warnings, tamper flags, siren, communication status, and output states
@@ -397,6 +401,8 @@ The KYO panel supports three arming modes per partition (from the Bentel user ma
 
 The **Internal** attribute is configured per-zone in KyoUnit (or via keypad parameter 164-192). Only zones with this attribute checked are bypassed during Stay/Night modes. Away mode always monitors all zones regardless of the attribute.
 
+<img src="images/BentelKyo32Unit.jpg" alt="KyoUnit Configuration" width="450px"/>
+
 If **no zones** have the Internal attribute set, then Stay and Night modes behave identically to Away — the only difference being that Night removes the entry delay. This is useful when you want full protection with instant response (e.g., arming at night and using a keyfob to disarm before moving).
 
 ### Zone Types
@@ -453,7 +459,7 @@ Decoded event types:
 | Remote Command | — |
 
 Example log output:
-```
+```text
 Event [246]: 01-03-2026 11:35  Recognized Code n.23
 Event [247]: 01-03-2026 11:35  Arm Partition n.1
 Event [248]: 01-03-2026 11:35  Arm Partition n.2
@@ -461,6 +467,8 @@ Event [250]: 01-03-2026 11:35  Alarm Zone n.5
 Event [252]: 01-03-2026 11:36  Recognized Code n.2
 Event [253]: 01-03-2026 11:36  Disarm Partition n.1
 ```
+
+<img src="images/ESPHomeLogs.png" alt="ESPHome Event Logs" width="600px"/>
 
 ### Arm Preset Buttons
 
@@ -659,4 +667,6 @@ For discussions and support, visit the [Home Assistant Community forum](https://
 
 GNU AGPLv3 - [Lorenzo De Luca](https://lorenzodeluca.dev), [Rui Marinho](https://github.com/ruimarinho)
 
-Original project by Lorenzo De Luca. Thanks to @dario81 for initial porting to ESPHome and @lcavalli for code refactor inspiration.
+Original project by Lorenzo De Luca. 
+A special and huge public **THANK YOU** to [@ruimarinho](https://github.com/ruimarinho) for his precious contribution and hard work on the migration to the native ESPHome component!
+Also thanks to @dario81 for initial porting to ESPHome and @lcavalli for code refactor inspiration.

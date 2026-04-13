@@ -25,6 +25,9 @@ jobs:
           - tests/test_sensors_only.yaml
           - tests/test_controls.yaml
           - tests/test_32_zones.yaml
+          - tests/test_pulse_output.yaml
+          - tests/test_zone_datetime.yaml
+          - tests/test_debug_switches.yaml
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python

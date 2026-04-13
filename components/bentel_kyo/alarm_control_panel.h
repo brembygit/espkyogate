@@ -31,6 +31,9 @@ class BentelKyoAlarmPanel : public alarm_control_panel::AlarmControlPanel, publi
   void add_code(const std::string &code) { this->codes_.push_back(code); }
   void set_requires_code_to_arm(bool code_to_arm) { this->requires_code_to_arm_ = code_to_arm; }
 
+  // Restores state to unknown
+  void invalidate_state();
+
   // Called by the hub after polling
   void update_state_from_hub();
 

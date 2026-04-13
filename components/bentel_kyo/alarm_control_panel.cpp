@@ -85,6 +85,11 @@ void BentelKyoAlarmPanel::control(const alarm_control_panel::AlarmControlPanelCa
   }
 }
 
+void BentelKyoAlarmPanel::invalidate_state() {
+  // Clear the internal state and mark it as invalid to signal unknown state.
+  this->set_has_state(false);
+}
+
 void BentelKyoAlarmPanel::update_state_from_hub() {
   if (this->parent_ == nullptr)
     return;

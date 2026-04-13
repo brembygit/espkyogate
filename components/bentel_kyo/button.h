@@ -1,7 +1,7 @@
 /*
- * espkyogate - ESPHome component for Bentel KYO alarms
- * Copyright (C) 2025 Lorenzo De Luca (me@lorenzodeluca.dev)
- * Copyright (C) 2026 Rui Marinho (ruipmarinho@gmail.com)
+ * espkyogate - ESPHome native component for Bentel KYO Units
+ * Project started and maintained by Lorenzo De Luca (me@lorenzodeluca.dev)
+ * Special thanks for ESPHome native component refactor to Rui Marinho (ruipmarinho@gmail.com)
  *
  * GNU Affero General Public License v3.0
  */

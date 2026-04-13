@@ -5,6 +5,8 @@
 
 A proper [ESPHome external component](https://esphome.io/components/external_components.html) for **Bentel Security KYO alarm panels**, based on ESP32 and communicating over RS-232 serial via a MAX3232 level shifter.
 
+> [!WARNING]  
+> **BREAKING CHANGE (v2026.4.13)**: The project has been completely overhauled and migrated into a native ESPHome component! If you were using the previous version with the custom `esphome.espkyogate_*` services, please note that those are no longer compatible. You will need to update your ESPHome YAML and Home Assistant package configuration to use the new native `alarm_control_panel`, `button`, and `binary_sensor` entities.
 > **Warning**
 > This software was developed by analyzing serial messages from/to the panel. It is not sponsored or officially supported by **Bentel**.
 
@@ -659,4 +661,6 @@ For discussions and support, visit the [Home Assistant Community forum](https://
 
 GNU AGPLv3 - [Lorenzo De Luca](https://lorenzodeluca.dev), [Rui Marinho](https://github.com/ruimarinho)
 
-Original project by Lorenzo De Luca. Thanks to @dario81 for initial porting to ESPHome and @lcavalli for code refactor inspiration.
+Original project by Lorenzo De Luca. 
+A special and huge public **THANK YOU** to [@ruimarinho](https://github.com/ruimarinho) for his precious contribution and hard work on the migration to the native ESPHome component!
+Also thanks to @dario81 for initial porting to ESPHome and @lcavalli for code refactor inspiration.

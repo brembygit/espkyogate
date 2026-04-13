@@ -183,10 +183,33 @@ void BentelKyo::handle_serial_failure_() {
   if (this->consecutive_failures_ < 7)
     this->consecutive_failures_++;
   if (this->consecutive_failures_ >= MAX_INVALID_COUNT) {
+    bool was_ok = this->communication_ok_;
     this->communication_ok_ = false;
     uint32_t backoff_ms = (1UL << (this->consecutive_failures_ - (MAX_INVALID_COUNT - 1))) * 1000UL;
     this->backoff_until_ms_ = millis() + backoff_ms;
     ESP_LOGW(TAG, "Panel not responding, retrying in %lus", backoff_ms / 1000UL);
+
+    // Transition to communication lost: invalidate all sensor states
+    if (was_ok) {
+      ESP_LOGW(TAG, "Communication lost — setting all sensors to unknown");
+
+      // Invalidate all binary sensors (except COMMUNICATION itself)
+      for (auto &entry : this->binary_sensors_) {
+        if (entry.type != BinarySensorType::COMMUNICATION) {
+          entry.sensor->invalidate_state();
+        }
+      }
+
+      // Invalidate alarm panel states
+      for (auto *panel : this->alarm_panels_) {
+        panel->invalidate_state();
+      }
+
+      // Clear response caches so states are re-published when communication resumes
+      this->sensor_cache_len_ = 0;
+      this->partition_cache_len_ = 0;
+      this->force_publish_ = true;
+    }
   }
 
   // Publish communication status

@@ -84,6 +84,14 @@ time:
     id: sntp_time
 
 # ========================================
+# Bentel KYO Hub
+# ========================================
+
+bentel_kyo:
+  id: kyo
+  uart_id: uart_bus
+
+# ========================================
 # Switches
 # ========================================
 
@@ -108,14 +116,6 @@ switch:
     bentel_kyo_id: kyo
     type: log_trace
     name: "State Change Log"
-
-# ========================================
-# Bentel KYO Hub
-# ========================================
-
-bentel_kyo:
-  id: kyo
-  uart_id: uart_bus
 
 # ========================================
 # Alarm Control Panel (one per partition)

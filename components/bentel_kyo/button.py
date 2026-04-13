@@ -190,6 +190,6 @@ async def to_code(config):
         cg.add(var.set_output_number(config[CONF_OUTPUT_NUMBER]))
     elif type_str == "pulse_output":
         cg.add(var.set_output_number(config[CONF_OUTPUT_NUMBER]))
-        cg.add(var.set_pulse_time(int(config[CONF_PULSE_TIME])))
+        cg.add(var.set_pulse_time(config[CONF_PULSE_TIME].total_milliseconds))
     elif type_str in ("include_zone", "exclude_zone"):
         cg.add(var.set_zone_number(config[CONF_ZONE_NUMBER]))

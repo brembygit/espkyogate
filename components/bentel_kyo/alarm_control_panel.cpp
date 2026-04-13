@@ -87,9 +87,7 @@ void BentelKyoAlarmPanel::control(const alarm_control_panel::AlarmControlPanelCa
 
 void BentelKyoAlarmPanel::invalidate_state() {
   // Clear the internal state and mark it as invalid to signal unknown state.
-  this->has_state_ = false;
-  // AlarmControlPanel API in ESPHome does not export a native 'update unknown'
-  // but clearing has_state_ makes it effectively unavailable.
+  this->has_state = false;
 }
 
 void BentelKyoAlarmPanel::update_state_from_hub() {

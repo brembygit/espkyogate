@@ -146,9 +146,22 @@ uart:
   data_bits: 8
   parity: EVEN
 
+# ========================================
+# Bentel KYO Hub
+# ========================================
+
 bentel_kyo:
   id: kyo
   uart_id: uart_bus
+
+# NTP time source (required for sync_datetime button)
+time:
+  - platform: sntp
+    id: sntp_time
+
+# ========================================
+# Alarm Control Panel (one per partition)
+# ========================================
 
 # Alarm Control Panel — one per partition (up to 8)
 # Maps to Home Assistant alarm_control_panel entities with arm/disarm controls
@@ -175,8 +188,11 @@ alarm_control_panel:
     name: "Basement"
     partition: 3
 
-# Binary Sensors — zones, warnings, tamper, siren, outputs
+# ========================================
+# Binary Sensors
+# ========================================
 
+# Binary Sensors — zones, warnings, tamper, siren, outputs
 binary_sensor:
   - platform: bentel_kyo
     bentel_kyo_id: kyo
@@ -297,16 +313,39 @@ text_sensor:
       - code: 2
         name: "Code 2 Name"
 
-# Switch — polling control
+# ========================================
+# Switches
+# ========================================
 
 switch:
+  - platform: safe_mode
+    name: "ESPKyoGate (Safe Mode)"
+
+  # Polling control — enable/disable panel communication at runtime
   - platform: bentel_kyo
     bentel_kyo_id: kyo
+    type: polling
     name: "Panel Polling"
 
-# Buttons — reread config, reset alarms, event log, arm presets
+  # Serial trace — log raw TX/RX hex bytes for serial debugging
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: serial_trace
+    name: "Serial Trace Log"
 
+  # Log trace — log state changes (zone, partition, output) for debugging
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: log_trace
+    name: "State Change Log"
+
+# ========================================
+# Buttons
+# ========================================
+
+# Buttons — reread config, reset alarms, event log, arm presets
 button:
+  # Panel management buttons
   - platform: bentel_kyo
     bentel_kyo_id: kyo
     type: reread_config
@@ -319,22 +358,46 @@ button:
     bentel_kyo_id: kyo
     type: read_event_log
     name: "Read Event Log"
+
+  # Datetime sync — sends current NTP time to the alarm panel
   - platform: bentel_kyo
     bentel_kyo_id: kyo
-    type: arm_preset
-    name: "Arm All Away"
-    partitions:
-      1: away
-      2: away
-      3: away
+    type: sync_datetime
+    name: "Sync Panel Clock"
+
+  # Output control buttons
   - platform: bentel_kyo
     bentel_kyo_id: kyo
-    type: arm_preset
-    name: "Disarm All"
-    partitions:
-      1: disarm
-      2: disarm
-      3: disarm
+    type: activate_output
+    output_number: 1
+    name: "Activate Output 1"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: deactivate_output
+    output_number: 1
+    name: "Deactivate Output 1"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: pulse_output
+    output_number: 1
+    pulse_time: 1000ms
+    name: "Pulse Output 1 (1s)"
+
+  # Zone control buttons
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: include_zone
+    zone_number: 1
+    name: "Include Zone 1"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: exclude_zone
+    zone_number: 1
+    name: "Exclude Zone 1"
+
+sensor:
+  - platform: uptime
+    name: "Uptime"
 ```
 
 ## Alarm Control Panel

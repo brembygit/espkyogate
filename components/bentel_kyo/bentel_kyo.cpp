@@ -147,8 +147,11 @@ void BentelKyo::loop() {
             this->alarm_model_ == AlarmModel::KYO_8G || this->alarm_model_ == AlarmModel::KYO_8W) {
           cmd = CMD_GET_PARTITION_KYO8; cmd_len = sizeof(CMD_GET_PARTITION_KYO8);
         } else {
-          // Both KYO32 and KYO32G use the same partition command
-          cmd = CMD_GET_PARTITION_KYO32; cmd_len = sizeof(CMD_GET_PARTITION_KYO32);
+          if (this->alarm_model_ == AlarmModel::KYO_32G) {
+            cmd = CMD_GET_PARTITION_KYO32G; cmd_len = sizeof(CMD_GET_PARTITION_KYO32G);
+          } else {
+            cmd = CMD_GET_PARTITION_KYO32; cmd_len = sizeof(CMD_GET_PARTITION_KYO32);
+          }
         }
         this->send_command_async_(cmd, cmd_len, 2);
         return;  // Don't update health yet — wait for partition response

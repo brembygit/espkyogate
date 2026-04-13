@@ -8,6 +8,7 @@
 
 #include "bentel_kyo.h"
 #include "alarm_control_panel.h"
+#include <ctime>
 
 namespace esphome {
 namespace bentel_kyo {
@@ -556,12 +557,13 @@ bool BentelKyo::parse_partition_status_(const uint8_t *rx, int count) {
   if (is_kyo8) {
     if (this->alarm_model_ == AlarmModel::KYO_8W) {
       // KYO8W: rx[10] = siren byte, rx[12] = outputs 1-8
+      // KYO8W was not in the old codebase; bit 6 is per contributor's addition
       this->siren_active_ = (rx[10] >> 6) & 1;
       for (int i = 0; i < 8; i++)
         this->output_state_[i] = (rx[12] >> i) & 1;
     } else {
-      // KYO4/KYO8/KYO8G: rx[10] bits 0-4 = outputs 1-5, bit 6 = siren, bit 7 = tamper memory
-      this->siren_active_ = (rx[10] >> 6) & 1;
+      // KYO4/KYO8/KYO8G: rx[10] bit 5 = siren, bits 0-4 = outputs 1-5
+      this->siren_active_ = (rx[10] >> 5) & 1;
       for (int i = 0; i < 5; i++)
         this->output_state_[i] = (rx[10] >> i) & 1;
     }
@@ -962,8 +964,8 @@ void BentelKyo::update_datetime(uint8_t day, uint8_t month, uint16_t year,
 }
 
 void BentelKyo::sync_datetime_from_ntp() {
-  // Use ESPHome's built-in RealTimeClock to get current time
-  auto now = ESPTime::now();
+  // Get current local time from the system clock (synced by SNTP if configured)
+  auto now = ESPTime::from_epoch_local(::time(nullptr));
   if (!now.is_valid()) {
     ESP_LOGW(TAG, "NTP time not available yet, cannot sync datetime");
     return;

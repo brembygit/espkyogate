@@ -1,0 +1,58 @@
+# Test: Debug trace switches
+# Validates: serial_trace and log_trace typed switches compile standalone
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [bentel_kyo]
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+    version: recommended
+
+esphome:
+  name: test-debug-switches
+  friendly_name: Test Debug Switches
+
+uart:
+  id: uart_bus
+  tx_pin: GPIO5
+  rx_pin: GPIO4
+  baud_rate: 9600
+  data_bits: 8
+  parity: EVEN
+
+logger:
+  level: DEBUG
+  baud_rate: 0
+
+api:
+
+ota:
+  platform: esphome
+
+wifi:
+  ssid: "test_ssid"
+  password: "test_password"
+
+bentel_kyo:
+  id: kyo
+  uart_id: uart_bus
+
+# All three switch types
+switch:
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: polling
+    name: "Panel Polling"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: serial_trace
+    name: "Serial Trace"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: log_trace
+    name: "Log Trace"

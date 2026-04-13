@@ -1,5 +1,4 @@
-# Test: Full configuration exercising all features
-# Validates: hub, alarm_control_panel, binary_sensor with all sensor types
+#            all buttons (arm, output, zone, datetime), all switches (polling, trace)
 
 external_components:
   - source:
@@ -38,9 +37,18 @@ wifi:
   ssid: "test_ssid"
   password: "test_password"
 
+# NTP time source (required for sync_datetime)
+time:
+  - platform: sntp
+    id: sntp_time
+
 bentel_kyo:
   id: kyo
   uart_id: uart_bus
+
+# ========================================
+# Alarm Control Panels
+# ========================================
 
 alarm_control_panel:
   - platform: bentel_kyo
@@ -58,6 +66,10 @@ alarm_control_panel:
     bentel_kyo_id: kyo
     name: "Partition 2"
     partition: 2
+
+# ========================================
+# Binary Sensors (all types)
+# ========================================
 
 binary_sensor:
   - platform: bentel_kyo
@@ -139,6 +151,10 @@ binary_sensor:
       - output_number: 2
         name: "Output 2"
 
+# ========================================
+# Text Sensors
+# ========================================
+
 text_sensor:
   - platform: bentel_kyo
     bentel_kyo_id: kyo
@@ -149,3 +165,95 @@ text_sensor:
     keyfobs:
       - slot: 1
         name: "Keyfob 1"
+
+# ========================================
+# Switches (all three typed types)
+# ========================================
+
+switch:
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: polling
+    name: "Panel Polling"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: serial_trace
+    name: "Serial Trace Log"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: log_trace
+    name: "State Change Log"
+
+# ========================================
+# Buttons (all types)
+# ========================================
+
+button:
+  # Management
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: reread_config
+    name: "Reread Config"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: reset_alarms
+    name: "Reset Alarms"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: read_event_log
+    name: "Read Event Log"
+
+  # Arming
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: arm_all_away
+    name: "Arm All Away"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: disarm_all
+    name: "Disarm All"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: arm_preset
+    name: "Preset Mixed"
+    partitions:
+      1: away
+      2: home
+      3: night
+      4: disarm
+
+  # Output control (NEW)
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: activate_output
+    output_number: 1
+    name: "Activate Output 1"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: deactivate_output
+    output_number: 1
+    name: "Deactivate Output 1"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: pulse_output
+    output_number: 1
+    pulse_time: 1000ms
+    name: "Pulse Output 1"
+
+  # Zone control (NEW)
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: include_zone
+    zone_number: 1
+    name: "Include Zone 1"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: exclude_zone
+    zone_number: 1
+    name: "Exclude Zone 1"
+
+  # Datetime sync (NEW)
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: sync_datetime
+    name: "Sync Panel Clock"

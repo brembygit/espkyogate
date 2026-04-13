@@ -229,7 +229,7 @@ class BentelKyo : public PollingComponent, public uart::UARTDevice {
   int serial_cmd_len_{0};  // length of command sent (to detect echo end)
   uint32_t serial_sent_ms_{0};
   uint32_t serial_last_byte_ms_{0};
-  uint32_t serial_timeout_ms_{80};
+  uint32_t serial_timeout_ms_{200};
   // Callback: 0=detect, 1=sensor, 2=partition
   uint8_t serial_pending_op_{0};
 

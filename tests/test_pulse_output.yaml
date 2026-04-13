@@ -1,0 +1,90 @@
+# Test: Pulse output with edge-case parameters
+# Validates: pulse_output button compiles with various pulse_time values
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [bentel_kyo]
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+    version: recommended
+
+esphome:
+  name: test-pulse-output
+  friendly_name: Test Pulse Output
+
+uart:
+  id: uart_bus
+  tx_pin: GPIO5
+  rx_pin: GPIO4
+  baud_rate: 9600
+  data_bits: 8
+  parity: EVEN
+
+logger:
+  level: DEBUG
+  baud_rate: 0
+
+api:
+
+ota:
+  platform: esphome
+
+wifi:
+  ssid: "test_ssid"
+  password: "test_password"
+
+bentel_kyo:
+  id: kyo
+  uart_id: uart_bus
+
+button:
+  # Short pulse (minimum practical value)
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: pulse_output
+    output_number: 1
+    pulse_time: 100ms
+    name: "Pulse 100ms"
+
+  # Default pulse (1 second)
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: pulse_output
+    output_number: 3
+    pulse_time: 1s
+    name: "Pulse 1s"
+
+  # Long pulse
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: pulse_output
+    output_number: 8
+    pulse_time: 5s
+    name: "Pulse 5s"
+
+  # Activate/deactivate all valid outputs 1-8
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: activate_output
+    output_number: 1
+    name: "Activate Output 1"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: activate_output
+    output_number: 8
+    name: "Activate Output 8"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: deactivate_output
+    output_number: 1
+    name: "Deactivate Output 1"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: deactivate_output
+    output_number: 8
+    name: "Deactivate Output 8"

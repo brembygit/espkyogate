@@ -1,5 +1,5 @@
-# Test: Button and switch control platforms
-# Validates: switch platform and all button types compile
+# Test: Button and switch control platforms (including new features)
+# Validates: typed switch platform, all button types (old + new) compile
 
 external_components:
   - source:
@@ -38,6 +38,11 @@ wifi:
   ssid: "test_ssid"
   password: "test_password"
 
+# NTP time source (required for sync_datetime button)
+time:
+  - platform: sntp
+    id: sntp_time
+
 bentel_kyo:
   id: kyo
   uart_id: uart_bus
@@ -56,12 +61,30 @@ alarm_control_panel:
     name: "Partition 3"
     partition: 3
 
+# ========================================
+# Switches (typed schema)
+# ========================================
+
 switch:
   - platform: bentel_kyo
     bentel_kyo_id: kyo
+    type: polling
     name: "Panel Polling"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: serial_trace
+    name: "Serial Trace Log"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: log_trace
+    name: "State Change Log"
+
+# ========================================
+# Buttons (all types)
+# ========================================
 
 button:
+  # --- Original button types ---
   - platform: bentel_kyo
     bentel_kyo_id: kyo
     type: reread_config
@@ -90,3 +113,43 @@ button:
       1: away
       2: night
       3: disarm
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: reset_alarms
+    name: "Reset Alarms"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: read_event_log
+    name: "Read Event Log"
+
+  # --- New button types ---
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: activate_output
+    output_number: 1
+    name: "Activate Output 1"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: deactivate_output
+    output_number: 4
+    name: "Deactivate Output 4"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: pulse_output
+    output_number: 2
+    pulse_time: 1500ms
+    name: "Pulse Output 2"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: include_zone
+    zone_number: 1
+    name: "Include Zone 1"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: exclude_zone
+    zone_number: 5
+    name: "Exclude Zone 5"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: sync_datetime
+    name: "Sync Panel Clock"

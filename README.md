@@ -42,6 +42,8 @@ Model detection is automatic via firmware version query on first connection.
 
 ## Features
 
+<img src="images/HomeAssistant-Lovelace.png" alt="Home Assistant Dashboard" width="450px"/>
+
 - **Alarm Control Panel** entities per partition (arm away, arm home, arm night, disarm) with full Home Assistant integration
 - **Binary sensors** for zones, zone tamper, zone bypass, alarm memory, tamper memory, warnings, tamper flags, siren, communication status, and output states
 - **Text sensors** for firmware version, alarm model, zone diagnostics (type, panel name, partition, serial number), output names, partition timers, keyfob serial numbers, partition names, and code names
@@ -399,6 +401,8 @@ The KYO panel supports three arming modes per partition (from the Bentel user ma
 
 The **Internal** attribute is configured per-zone in KyoUnit (or via keypad parameter 164-192). Only zones with this attribute checked are bypassed during Stay/Night modes. Away mode always monitors all zones regardless of the attribute.
 
+<img src="images/BentelKyo32Unit.jpg" alt="KyoUnit Configuration" width="450px"/>
+
 If **no zones** have the Internal attribute set, then Stay and Night modes behave identically to Away — the only difference being that Night removes the entry delay. This is useful when you want full protection with instant response (e.g., arming at night and using a keyfob to disarm before moving).
 
 ### Zone Types
@@ -455,7 +459,7 @@ Decoded event types:
 | Remote Command | — |
 
 Example log output:
-```
+```text
 Event [246]: 01-03-2026 11:35  Recognized Code n.23
 Event [247]: 01-03-2026 11:35  Arm Partition n.1
 Event [248]: 01-03-2026 11:35  Arm Partition n.2
@@ -463,6 +467,8 @@ Event [250]: 01-03-2026 11:35  Alarm Zone n.5
 Event [252]: 01-03-2026 11:36  Recognized Code n.2
 Event [253]: 01-03-2026 11:36  Disarm Partition n.1
 ```
+
+<img src="images/ESPHomeLogs.png" alt="ESPHome Event Logs" width="600px"/>
 
 ### Arm Preset Buttons
 

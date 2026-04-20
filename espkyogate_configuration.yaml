@@ -1,6 +1,6 @@
 # espkyogate - ESPHome component for Bentel KYO alarms (https://github.com/lorenzo-deluca/espkyogate)
-# Copyright (C) 2025 Lorenzo De Luca (me@lorenzodeluca.dev)
-# Copyright (C) 2026 Rui Marinho (ruipmarinho@gmail.com)
+# Project started and maintained by Lorenzo De Luca (me@lorenzodeluca.dev)
+# Special thanks for ESPHome native component refactor to Rui Marinho (ruipmarinho@gmail.com)
 # Example YAML for all Bentel KYO models (KYO4/8/8G/8W/32/32G)
 
 external_components:

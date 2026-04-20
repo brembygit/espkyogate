@@ -3,12 +3,10 @@
 [![](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/lorenzo-deluca)
 [![buy me a coffee](https://img.shields.io/badge/support-buymeacoffee-222222.svg?style=flat-square)](https://www.buymeacoffee.com/lorenzodeluca)
 
-A proper [ESPHome external component](https://esphome.io/components/external_components.html) for **Bentel Security KYO alarm panels**, based on ESP32 and communicating over RS-232 serial via a MAX3232 level shifter.
+Complete [ESPHome component](https://esphome.io/components/external_components.html) for **Bentel Security KYO alarm panels**, based on ESP32 and communicating over RS-232 serial via a MAX3232 level shifter.
 
 > [!WARNING]  
 > **BREAKING CHANGE (v2026.4.13)**: The project has been completely overhauled and migrated into a native ESPHome component! If you were using the previous version with the custom `esphome.espkyogate_*` services, please note that those are no longer compatible. You will need to update your ESPHome YAML and Home Assistant package configuration to use the new native `alarm_control_panel`, `button`, and `binary_sensor` entities.
-> **Warning**
-> This software was developed by analyzing serial messages from/to the panel. It is not sponsored or officially supported by **Bentel**.
 
 ## Supported Models
 
@@ -18,8 +16,9 @@ A proper [ESPHome external component](https://esphome.io/components/external_com
 - [x] Bentel KYO 8W
 - [x] Bentel KYO 8
 - [x] Bentel KYO 4
-> **Warning**
-> :warning: This software was developed by analyzing serial messages from/to central, it was not sponsored or officially supported by **Bentel**
+
+> :warning: **Warning**
+> This software was developed by analyzing serial messages from/to central, it was not sponsored or officially supported by **Bentel**
 > If someone from **Bentel** would like to contribute or collaborate please contact me at [me@lorenzodeluca.dev](mailto:me@lorenzodeluca.dev?subject=[GitHub]ESPKyoGate)
 
 ## Contents

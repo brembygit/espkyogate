@@ -44,6 +44,16 @@ jobs:
       - name: Compile ${{ matrix.config }}
         run: esphome compile ${{ matrix.config }}
 
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run decode_panel_name tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -o test_decode_panel_name tests/test_decode_panel_name.cpp
+          ./test_decode_panel_name
+
   validate-negative:
     name: Validate Invalid Config (${{ matrix.channel }})
     runs-on: ubuntu-22.04

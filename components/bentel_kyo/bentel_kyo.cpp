@@ -8,6 +8,7 @@
 
 #include "bentel_kyo.h"
 #include "alarm_control_panel.h"
+#include "cp437.h"
 #include <ctime>
 
 namespace esphome {
@@ -1175,20 +1176,8 @@ void BentelKyo::read_zone_names_() {
         break;
 
       int offset = 6 + (n * 16);
-      char name_buf[17];
-      memcpy(name_buf, &rx[offset], 16);
-      name_buf[16] = '\0';
-
-      // Trim trailing spaces
-      for (int j = 15; j >= 0; j--) {
-        if (name_buf[j] == ' ' || name_buf[j] == '\0')
-          name_buf[j] = '\0';
-        else
-          break;
-      }
-
-      this->zone_name_[zone_idx] = name_buf;
-      ESP_LOGD(TAG, "Zone %d name: '%s'", zone_idx + 1, name_buf);
+      this->zone_name_[zone_idx] = decode_panel_name(&rx[offset], 16);
+      ESP_LOGD(TAG, "Zone %d name: '%s'", zone_idx + 1, this->zone_name_[zone_idx].c_str());
     }
   }
 }
@@ -1256,20 +1245,8 @@ void BentelKyo::read_output_names_() {
         break;
 
       int offset = 6 + (n * 16);
-      char name_buf[17];
-      memcpy(name_buf, &rx[offset], 16);
-      name_buf[16] = '\0';
-
-      // Trim trailing spaces
-      for (int j = 15; j >= 0; j--) {
-        if (name_buf[j] == ' ' || name_buf[j] == '\0')
-          name_buf[j] = '\0';
-        else
-          break;
-      }
-
-      this->output_name_[out_idx] = name_buf;
-      ESP_LOGD(TAG, "Output %d name: '%s'", out_idx + 1, name_buf);
+      this->output_name_[out_idx] = decode_panel_name(&rx[offset], 16);
+      ESP_LOGD(TAG, "Output %d name: '%s'", out_idx + 1, this->output_name_[out_idx].c_str());
     }
   }
 }
@@ -1354,20 +1331,8 @@ void BentelKyo::read_keyfob_names_() {
         break;
 
       int offset = 6 + (n * 16);
-      char name_buf[17];
-      memcpy(name_buf, &rx[offset], 16);
-      name_buf[16] = '\0';
-
-      // Trim trailing spaces
-      for (int j = 15; j >= 0; j--) {
-        if (name_buf[j] == ' ' || name_buf[j] == '\0')
-          name_buf[j] = '\0';
-        else
-          break;
-      }
-
-      this->keyfob_name_[kf_idx] = name_buf;
-      ESP_LOGD(TAG, "Keyfob %d name: '%s'", kf_idx + 1, name_buf);
+      this->keyfob_name_[kf_idx] = decode_panel_name(&rx[offset], 16);
+      ESP_LOGD(TAG, "Keyfob %d name: '%s'", kf_idx + 1, this->keyfob_name_[kf_idx].c_str());
     }
   }
 }
@@ -1391,20 +1356,8 @@ void BentelKyo::read_partition_names_() {
         break;
 
       int offset = 6 + (n * 16);
-      char name_buf[17];
-      memcpy(name_buf, &rx[offset], 16);
-      name_buf[16] = '\0';
-
-      // Trim trailing spaces
-      for (int j = 15; j >= 0; j--) {
-        if (name_buf[j] == ' ' || name_buf[j] == '\0')
-          name_buf[j] = '\0';
-        else
-          break;
-      }
-
-      this->partition_name_[part_idx] = name_buf;
-      ESP_LOGD(TAG, "Partition %d name: '%s'", part_idx + 1, name_buf);
+      this->partition_name_[part_idx] = decode_panel_name(&rx[offset], 16);
+      ESP_LOGD(TAG, "Partition %d name: '%s'", part_idx + 1, this->partition_name_[part_idx].c_str());
     }
   }
 }
@@ -1428,20 +1381,8 @@ void BentelKyo::read_code_names_() {
         break;
 
       int offset = 6 + (n * 16);
-      char name_buf[17];
-      memcpy(name_buf, &rx[offset], 16);
-      name_buf[16] = '\0';
-
-      // Trim trailing spaces
-      for (int j = 15; j >= 0; j--) {
-        if (name_buf[j] == ' ' || name_buf[j] == '\0')
-          name_buf[j] = '\0';
-        else
-          break;
-      }
-
-      this->code_name_[code_idx] = name_buf;
-      ESP_LOGD(TAG, "Code %d name: '%s'", code_idx + 1, name_buf);
+      this->code_name_[code_idx] = decode_panel_name(&rx[offset], 16);
+      ESP_LOGD(TAG, "Code %d name: '%s'", code_idx + 1, this->code_name_[code_idx].c_str());
     }
   }
 }

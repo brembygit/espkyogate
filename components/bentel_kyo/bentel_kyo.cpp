@@ -146,7 +146,7 @@ void BentelKyo::loop() {
         const uint8_t *cmd;
         int cmd_len;
         if (this->alarm_model_ == AlarmModel::KYO_8 || this->alarm_model_ == AlarmModel::KYO_4 ||
-            this->alarm_model_ == AlarmModel::KYO_8G || this->alarm_model_ == AlarmModel::KYO_8W) {
+            this->alarm_model_ == AlarmModel::KYO_8G) {
           cmd = CMD_GET_PARTITION_KYO8; cmd_len = sizeof(CMD_GET_PARTITION_KYO8);
         } else {
           // KYO32 and KYO32G use the same partition status command
@@ -557,7 +557,7 @@ bool BentelKyo::parse_sensor_status_(const uint8_t *rx, int count) {
 
 bool BentelKyo::parse_partition_status_(const uint8_t *rx, int count) {
   bool is_kyo8 = (this->alarm_model_ == AlarmModel::KYO_8 || this->alarm_model_ == AlarmModel::KYO_4 ||
-                  this->alarm_model_ == AlarmModel::KYO_8G || this->alarm_model_ == AlarmModel::KYO_8W);
+                  this->alarm_model_ == AlarmModel::KYO_8G);
 
   int expected_len = is_kyo8 ? RESP_PARTITION_KYO8 : RESP_PARTITION_KYO32;
   if (count != expected_len) {

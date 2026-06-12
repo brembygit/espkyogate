@@ -209,6 +209,10 @@ binary_sensor:
           name: "Front Door Partition"
         serial_number:
           name: "Front Door Serial Number"
+        # The integration overrides the dynamic HA class icons with a static "mdi:shield-home" icon
+        # Uncomment the next line and copy it to any zone you like to restore the dynamic HA icons
+        # You can use the same statement to use any icon you like
+        # icon: ""
       - zone: 2
         name: "Living Room PIR"
         device_class: motion

@@ -672,11 +672,37 @@ Communication health is tracked with exponential backoff:
 | Sensor status response | 18 bytes | 18 bytes |
 | Partition status response | 26 bytes | 26 bytes |
 | Wireless support | Yes | Varies by sub-model |
+| Programmable name tables | Low range (see below) | `0x2BA0`-`0x347F` |
 
 The non-G model is the older generation. The KYO 32M (marketing name)
 is a non-G KYO32 that supports wireless zones. Its firmware string is
 `KYO32   x.xx` (same as non-G), and it uses the KYO32 (non-G) register
 address `0x14EC` for partition status.
+
+### 9.1 KYO32G name table relocation
+
+On KYO32G the user-programmed name tables are stored in a lower address range
+than on non-G models. The non-G addresses (`0x2BA0`-`0x347F`) still respond on
+KYO32G but return a built-in **default label ROM** (factory names in the panel's
+configured language), not the user-edited labels. The actual programmable names
+live here:
+
+| Table | KYO32G base | Count | non-G base |
+|-------|-------------|-------|------------|
+| Partition names | `0x1750` | 8 | `0x2BA0` |
+| Keypad names | `0x17D0` | 8 | `0x2C20` |
+| Reader names | `0x1850` | 16 | `0x2CA0` |
+| Expander names | `0x1950` | 6 | `0x2DA0` |
+| Zone names | `0x19B0` | 32 | `0x2E00` |
+| Code names | `0x1BB0` | 24 | `0x3000` |
+| Keyfob names | `0x1D30` | 16 | `0x3180` |
+| Output names | `0x1E30` | 16 | `0x3280` |
+| Phone number names | `0x1F30` | 8 | `0x3380` |
+
+Each entry is 16 ASCII bytes, space-padded, read 4 per 64-byte request. The bases
+are not a single uniform offset from the non-G map, so each table is mapped
+individually. The component selects these addresses when the detected model is
+KYO32G (see `read_*_names_()` in `bentel_kyo.cpp`).
 
 ---
 

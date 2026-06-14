@@ -1154,8 +1154,13 @@ void BentelKyo::read_zone_config_() {
 }
 
 void BentelKyo::read_zone_names_() {
-  // Zone names at 0x2E00-0x2FFF: 16 ASCII bytes per zone, 4 zones per 64-byte read
-  static const uint16_t BASE_ADDRS[] = {0x2E00, 0x2E40, 0x2E80, 0x2EC0, 0x2F00, 0x2F40, 0x2F80, 0x2FC0};
+  // Zone names: 16 ASCII bytes per zone, 4 zones per 64-byte read.
+  // KYO32G keeps the user-programmed labels lower than the non-G map (issue #93):
+  // zone names at 0x19B0-0x1BAF instead of 0x2E00-0x2FFF.
+  static const uint16_t BASE_ADDRS_NONG[] = {0x2E00, 0x2E40, 0x2E80, 0x2EC0, 0x2F00, 0x2F40, 0x2F80, 0x2FC0};
+  static const uint16_t BASE_ADDRS_32G[] = {0x19B0, 0x19F0, 0x1A30, 0x1A70, 0x1AB0, 0x1AF0, 0x1B30, 0x1B70};
+  const uint16_t *BASE_ADDRS =
+      (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
   int num_reads = (this->max_zones_ <= 8) ? 2 : 8;
 
   for (int r = 0; r < num_reads; r++) {
@@ -1223,8 +1228,15 @@ bool BentelKyo::read_zone_esn_next_() {
 }
 
 void BentelKyo::read_output_names_() {
-  // Output names at 0x3280-0x337F: 16 ASCII bytes per output, 4 per 64-byte read, 16 outputs total
-  static const uint16_t BASE_ADDRS[] = {0x3280, 0x32C0, 0x3300, 0x3340};
+  // Output names: 16 ASCII bytes per output, 4 per 64-byte read, 16 outputs total.
+  // KYO32G stores the programmable label table at a different base than KYO32/KYO32M:
+  // the documented 0x3280-0x337F range holds a built-in (English) default label ROM,
+  // while the user-programmed labels live lower. Outputs were located at 0x1E30-0x1F2F
+  // via an on-device memory scan (issue #93).
+  static const uint16_t BASE_ADDRS_NONG[] = {0x3280, 0x32C0, 0x3300, 0x3340};
+  static const uint16_t BASE_ADDRS_32G[] = {0x1E30, 0x1E70, 0x1EB0, 0x1EF0};
+  const uint16_t *BASE_ADDRS =
+      (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
   int num_reads = 4;  // 16 outputs = 4 reads of 4
 
   for (int r = 0; r < num_reads; r++) {
@@ -1309,8 +1321,13 @@ bool BentelKyo::read_keyfob_esn_next_() {
 }
 
 void BentelKyo::read_keyfob_names_() {
-  // Keyfob names at 0x3180-0x31FF: 16 ASCII bytes per keyfob, 4 per 64-byte read, 16 keyfobs total
-  static const uint16_t BASE_ADDRS[] = {0x3180, 0x31C0, 0x3200, 0x3240};
+  // Keyfob names: 16 ASCII bytes per keyfob, 4 per 64-byte read, 16 keyfobs total.
+  // KYO32G stores them lower than the non-G map (issue #93): keyfob names
+  // at 0x1D30-0x1E2F instead of 0x3180-0x327F.
+  static const uint16_t BASE_ADDRS_NONG[] = {0x3180, 0x31C0, 0x3200, 0x3240};
+  static const uint16_t BASE_ADDRS_32G[] = {0x1D30, 0x1D70, 0x1DB0, 0x1DF0};
+  const uint16_t *BASE_ADDRS =
+      (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
   int num_reads = 4;  // 16 keyfobs = 4 reads of 4
 
   for (int r = 0; r < num_reads; r++) {
@@ -1334,8 +1351,13 @@ void BentelKyo::read_keyfob_names_() {
 }
 
 void BentelKyo::read_partition_names_() {
-  // Partition names at 0x2BA0-0x2BFF: 16 ASCII bytes per partition, 4 per 64-byte read, 8 partitions total
-  static const uint16_t BASE_ADDRS[] = {0x2BA0, 0x2BE0};
+  // Partition names: 16 ASCII bytes per partition, 4 per 64-byte read, 8 partitions total.
+  // KYO32G stores them lower than the non-G map (issue #93): partition names
+  // at 0x1750-0x17CF instead of 0x2BA0-0x2C1F.
+  static const uint16_t BASE_ADDRS_NONG[] = {0x2BA0, 0x2BE0};
+  static const uint16_t BASE_ADDRS_32G[] = {0x1750, 0x1790};
+  const uint16_t *BASE_ADDRS =
+      (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
   int num_reads = 2;  // 8 partitions = 2 reads of 4
 
   for (int r = 0; r < num_reads; r++) {
@@ -1359,8 +1381,13 @@ void BentelKyo::read_partition_names_() {
 }
 
 void BentelKyo::read_code_names_() {
-  // Code names at 0x3000-0x317F: 16 ASCII bytes per code, 4 per 64-byte read, 24 codes total
-  static const uint16_t BASE_ADDRS[] = {0x3000, 0x3040, 0x3080, 0x30C0, 0x3100, 0x3140};
+  // Code names: 16 ASCII bytes per code, 4 per 64-byte read, 24 codes total.
+  // KYO32G stores them lower than the non-G map (issue #93): code names
+  // at 0x1BB0-0x1D2F instead of 0x3000-0x317F.
+  static const uint16_t BASE_ADDRS_NONG[] = {0x3000, 0x3040, 0x3080, 0x30C0, 0x3100, 0x3140};
+  static const uint16_t BASE_ADDRS_32G[] = {0x1BB0, 0x1BF0, 0x1C30, 0x1C70, 0x1CB0, 0x1CF0};
+  const uint16_t *BASE_ADDRS =
+      (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
   int num_reads = 6;  // 24 codes = 6 reads of 4
 
   for (int r = 0; r < num_reads; r++) {

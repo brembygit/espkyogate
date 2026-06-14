@@ -224,6 +224,7 @@ void BentelKyo::handle_serial_failure_() {
 void BentelKyo::reread_config() {
   ESP_LOGI(TAG, "Re-reading panel configuration registers...");
   this->config_read_step_ = 0;
+  this->config_chunk_index_ = 0;
   this->esn_read_index_ = 0;
   this->keyfob_read_index_ = 0;
 }
@@ -266,32 +267,34 @@ void BentelKyo::update() {
     return;
   }
 
-  // Read panel configuration once after model detection — one step per update cycle
-  // Config reads use blocking send_message_(), so they must NOT run in the same
-  // cycle as async sensor/partition polling (otherwise both commands collide on the bus)
+  // Read panel configuration once after model detection — one serial read per update
+  // cycle. Config reads use blocking send_message_(), so they must NOT run in the same
+  // cycle as async sensor/partition polling (otherwise both commands collide on the bus).
   //
-  // Steps 3 and 6 (zone ESN and keyfob ESN) read one slot per cycle to avoid
-  // blocking the main loop for 90+ seconds (0xC0xx reads take ~1.5s each).
+  // Every multi-block step reads a single 64-byte block per cycle and only advances to
+  // the next step when its read_*_() helper returns true, so no cycle blocks the main
+  // loop on more than one transaction (zone/keyfob ESN reads are per-slot for the same
+  // reason — 0xC0xx reads take ~1.5s each).
   if (this->config_read_step_ < 13 && this->communication_ok_) {
     switch (this->config_read_step_) {
       case 0: this->config_read_step_ = 1; break;  // skip one cycle after detection
-      case 1: this->read_zone_config_(); this->config_read_step_ = 2; break;
-      case 2: this->read_zone_names_(); this->config_read_step_ = 3; break;
+      case 1: if (this->read_zone_config_()) this->config_read_step_ = 2; break;
+      case 2: if (this->read_zone_names_()) this->config_read_step_ = 3; break;
       case 3:
         // Read one zone ESN per cycle; advance to step 4 when done
         if (this->read_zone_esn_next_())
           this->config_read_step_ = 4;
         break;
-      case 4: this->read_output_names_(); this->config_read_step_ = 5; break;
+      case 4: if (this->read_output_names_()) this->config_read_step_ = 5; break;
       case 5: this->read_partition_config_(); this->config_read_step_ = 6; break;
-      case 6: this->read_partition_names_(); this->config_read_step_ = 7; break;
-      case 7: this->read_code_names_(); this->config_read_step_ = 8; break;
+      case 6: if (this->read_partition_names_()) this->config_read_step_ = 7; break;
+      case 7: if (this->read_code_names_()) this->config_read_step_ = 8; break;
       case 8:
         // Read one keyfob ESN per cycle; advance to step 9 when done
         if (this->read_keyfob_esn_next_())
           this->config_read_step_ = 9;
         break;
-      case 9: this->read_keyfob_names_(); this->config_read_step_ = 10; break;
+      case 9: if (this->read_keyfob_names_()) this->config_read_step_ = 10; break;
       case 10: this->read_panel_mode_(); this->config_read_step_ = 11; break;
       case 11: this->read_status_flags_(); this->config_read_step_ = 12; break;
       case 12: this->publish_text_sensors_(); this->config_read_step_ = 13; break;
@@ -1111,76 +1114,76 @@ int BentelKyo::read_register_(uint16_t address, uint8_t length, uint8_t *respons
   return this->send_message_(cmd, 6, response, timeout_ms);
 }
 
-void BentelKyo::read_zone_config_() {
+bool BentelKyo::read_zone_config_() {
+  // Zone config: 4 bytes per zone, 16 zones per 64-byte read.
+  // One read per update cycle (block 0 = zones 1-16 at 0x009F, block 1 = 17-32 at
+  // 0x00DF); returns true when done so the loop is never blocked for long.
+  static const uint16_t BASE_ADDRS[] = {0x009F, 0x00DF};
+  int num_blocks = (this->max_zones_ > 16) ? 2 : 1;
+  int blk = this->config_chunk_index_;
+
   uint8_t rx[255];
-
-  // Read zones 1-16: address 0x009F, 63 bytes (returns 64 data bytes)
-  int count = this->read_register_(0x009F, 0x3F, rx, 300);
+  int count = this->read_register_(BASE_ADDRS[blk], 0x3F, rx, 300);
   if (count < 6 + 64) {
-    ESP_LOGW(TAG, "Zone config read 1-16 failed: got %d bytes", count);
-    return;
-  }
-
-  for (int i = 0; i < 16 && i < this->max_zones_; i++) {
-    int offset = 6 + (i * 4);
-    this->zone_type_raw_[i] = rx[offset];
-    this->zone_enrolled_[i] = (rx[offset + 1] == 0x01);
-    this->zone_area_mask_[i] = rx[offset + 2];
-    ESP_LOGD(TAG, "Zone %d raw: [%02X %02X %02X %02X] type=0x%02X enrolled=%d area=0x%02X",
-             i + 1, rx[offset], rx[offset + 1], rx[offset + 2], rx[offset + 3],
-             this->zone_type_raw_[i], this->zone_enrolled_[i], this->zone_area_mask_[i]);
-  }
-
-  // Read zones 17-32 (only for KYO32 models)
-  if (this->max_zones_ > 16) {
-    count = this->read_register_(0x00DF, 0x3F, rx, 300);
-    if (count < 6 + 64) {
-      ESP_LOGW(TAG, "Zone config read 17-32 failed: got %d bytes", count);
-      return;
-    }
-
+    ESP_LOGW(TAG, "Zone config read at 0x%04X failed: got %d bytes", BASE_ADDRS[blk], count);
+  } else {
     for (int i = 0; i < 16; i++) {
+      int z = blk * 16 + i;
+      if (z >= this->max_zones_)
+        break;
       int offset = 6 + (i * 4);
-      this->zone_type_raw_[16 + i] = rx[offset];
-      this->zone_enrolled_[16 + i] = (rx[offset + 1] == 0x01);
-      this->zone_area_mask_[16 + i] = rx[offset + 2];
+      this->zone_type_raw_[z] = rx[offset];
+      this->zone_enrolled_[z] = (rx[offset + 1] == 0x01);
+      this->zone_area_mask_[z] = rx[offset + 2];
+      ESP_LOGD(TAG, "Zone %d: type=0x%02X, area=0x%02X, enrolled=%d", z + 1,
+               this->zone_type_raw_[z], this->zone_area_mask_[z], this->zone_enrolled_[z]);
     }
   }
 
-  for (int i = 0; i < this->max_zones_; i++) {
-    ESP_LOGD(TAG, "Zone %d: type=0x%02X, area=0x%02X, enrolled=%d", i + 1,
-             this->zone_type_raw_[i], this->zone_area_mask_[i], this->zone_enrolled_[i]);
+  if (++this->config_chunk_index_ >= num_blocks) {
+    this->config_chunk_index_ = 0;
+    return true;
   }
+  return false;
 }
 
-void BentelKyo::read_zone_names_() {
+// Reads one 64-byte block (up to 4 names) of a name table per call, advancing
+// config_chunk_index_. Returns true when the whole table has been read. Keeps each
+// update() cycle short (one serial transaction) instead of blocking on several.
+bool BentelKyo::read_name_table_chunk_(const uint16_t *bases, int num_blocks, int count,
+                                       std::string *out, const char *what) {
+  int blk = this->config_chunk_index_;
+  uint8_t rx[255];
+  int rc = this->read_register_(bases[blk], 0x3F, rx, 300);
+  if (rc < 6 + 64) {
+    ESP_LOGW(TAG, "%s names read at 0x%04X failed: got %d bytes", what, bases[blk], rc);
+  } else {
+    for (int n = 0; n < 4; n++) {
+      int idx = blk * 4 + n;
+      if (idx >= count)
+        break;
+      out[idx] = decode_panel_name(&rx[6 + n * 16], 16);
+      ESP_LOGD(TAG, "%s %d name: '%s'", what, idx + 1, out[idx].c_str());
+    }
+  }
+
+  if (++this->config_chunk_index_ >= num_blocks) {
+    this->config_chunk_index_ = 0;
+    return true;
+  }
+  return false;
+}
+
+bool BentelKyo::read_zone_names_() {
   // Zone names: 16 ASCII bytes per zone, 4 zones per 64-byte read.
   // KYO32G keeps the user-programmed labels lower than the non-G map (issue #93):
   // zone names at 0x19B0-0x1BAF instead of 0x2E00-0x2FFF.
   static const uint16_t BASE_ADDRS_NONG[] = {0x2E00, 0x2E40, 0x2E80, 0x2EC0, 0x2F00, 0x2F40, 0x2F80, 0x2FC0};
   static const uint16_t BASE_ADDRS_32G[] = {0x19B0, 0x19F0, 0x1A30, 0x1A70, 0x1AB0, 0x1AF0, 0x1B30, 0x1B70};
-  const uint16_t *BASE_ADDRS =
+  const uint16_t *bases =
       (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
-  int num_reads = (this->max_zones_ <= 8) ? 2 : 8;
-
-  for (int r = 0; r < num_reads; r++) {
-    uint8_t rx[255];
-    int count = this->read_register_(BASE_ADDRS[r], 0x3F, rx, 300);
-    if (count < 6 + 64) {
-      ESP_LOGW(TAG, "Zone names read at 0x%04X failed: got %d bytes", BASE_ADDRS[r], count);
-      break;
-    }
-
-    for (int n = 0; n < 4; n++) {
-      int zone_idx = r * 4 + n;
-      if (zone_idx >= this->max_zones_)
-        break;
-
-      int offset = 6 + (n * 16);
-      this->zone_name_[zone_idx] = decode_panel_name(&rx[offset], 16);
-      ESP_LOGD(TAG, "Zone %d name: '%s'", zone_idx + 1, this->zone_name_[zone_idx].c_str());
-    }
-  }
+  int num_blocks = (this->max_zones_ <= 8) ? 2 : 8;
+  return this->read_name_table_chunk_(bases, num_blocks, this->max_zones_, this->zone_name_, "Zone");
 }
 
 bool BentelKyo::read_zone_esn_next_() {
@@ -1227,7 +1230,7 @@ bool BentelKyo::read_zone_esn_next_() {
   return false;
 }
 
-void BentelKyo::read_output_names_() {
+bool BentelKyo::read_output_names_() {
   // Output names: 16 ASCII bytes per output, 4 per 64-byte read, 16 outputs total.
   // KYO32G stores the programmable label table at a different base than KYO32/KYO32M:
   // the documented 0x3280-0x337F range holds a built-in (English) default label ROM,
@@ -1235,28 +1238,9 @@ void BentelKyo::read_output_names_() {
   // via an on-device memory scan (issue #93).
   static const uint16_t BASE_ADDRS_NONG[] = {0x3280, 0x32C0, 0x3300, 0x3340};
   static const uint16_t BASE_ADDRS_32G[] = {0x1E30, 0x1E70, 0x1EB0, 0x1EF0};
-  const uint16_t *BASE_ADDRS =
+  const uint16_t *bases =
       (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
-  int num_reads = 4;  // 16 outputs = 4 reads of 4
-
-  for (int r = 0; r < num_reads; r++) {
-    uint8_t rx[255];
-    int count = this->read_register_(BASE_ADDRS[r], 0x3F, rx, 300);
-    if (count < 6 + 64) {
-      ESP_LOGW(TAG, "Output names read at 0x%04X failed: got %d bytes", BASE_ADDRS[r], count);
-      break;
-    }
-
-    for (int n = 0; n < 4; n++) {
-      int out_idx = r * 4 + n;
-      if (out_idx >= KYO_MAX_OUTPUTS)
-        break;
-
-      int offset = 6 + (n * 16);
-      this->output_name_[out_idx] = decode_panel_name(&rx[offset], 16);
-      ESP_LOGD(TAG, "Output %d name: '%s'", out_idx + 1, this->output_name_[out_idx].c_str());
-    }
-  }
+  return this->read_name_table_chunk_(bases, 4, KYO_MAX_OUTPUTS, this->output_name_, "Output");
 }
 
 void BentelKyo::read_partition_config_() {
@@ -1320,94 +1304,37 @@ bool BentelKyo::read_keyfob_esn_next_() {
   return false;
 }
 
-void BentelKyo::read_keyfob_names_() {
+bool BentelKyo::read_keyfob_names_() {
   // Keyfob names: 16 ASCII bytes per keyfob, 4 per 64-byte read, 16 keyfobs total.
   // KYO32G stores them lower than the non-G map (issue #93): keyfob names
   // at 0x1D30-0x1E2F instead of 0x3180-0x327F.
   static const uint16_t BASE_ADDRS_NONG[] = {0x3180, 0x31C0, 0x3200, 0x3240};
   static const uint16_t BASE_ADDRS_32G[] = {0x1D30, 0x1D70, 0x1DB0, 0x1DF0};
-  const uint16_t *BASE_ADDRS =
+  const uint16_t *bases =
       (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
-  int num_reads = 4;  // 16 keyfobs = 4 reads of 4
-
-  for (int r = 0; r < num_reads; r++) {
-    uint8_t rx[255];
-    int count = this->read_register_(BASE_ADDRS[r], 0x3F, rx, 300);
-    if (count < 6 + 64) {
-      ESP_LOGW(TAG, "Keyfob names read at 0x%04X failed: got %d bytes", BASE_ADDRS[r], count);
-      break;
-    }
-
-    for (int n = 0; n < 4; n++) {
-      int kf_idx = r * 4 + n;
-      if (kf_idx >= KYO_MAX_KEYFOBS)
-        break;
-
-      int offset = 6 + (n * 16);
-      this->keyfob_name_[kf_idx] = decode_panel_name(&rx[offset], 16);
-      ESP_LOGD(TAG, "Keyfob %d name: '%s'", kf_idx + 1, this->keyfob_name_[kf_idx].c_str());
-    }
-  }
+  return this->read_name_table_chunk_(bases, 4, KYO_MAX_KEYFOBS, this->keyfob_name_, "Keyfob");
 }
 
-void BentelKyo::read_partition_names_() {
+bool BentelKyo::read_partition_names_() {
   // Partition names: 16 ASCII bytes per partition, 4 per 64-byte read, 8 partitions total.
   // KYO32G stores them lower than the non-G map (issue #93): partition names
   // at 0x1750-0x17CF instead of 0x2BA0-0x2C1F.
   static const uint16_t BASE_ADDRS_NONG[] = {0x2BA0, 0x2BE0};
   static const uint16_t BASE_ADDRS_32G[] = {0x1750, 0x1790};
-  const uint16_t *BASE_ADDRS =
+  const uint16_t *bases =
       (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
-  int num_reads = 2;  // 8 partitions = 2 reads of 4
-
-  for (int r = 0; r < num_reads; r++) {
-    uint8_t rx[255];
-    int count = this->read_register_(BASE_ADDRS[r], 0x3F, rx, 300);
-    if (count < 6 + 64) {
-      ESP_LOGW(TAG, "Partition names read at 0x%04X failed: got %d bytes", BASE_ADDRS[r], count);
-      break;
-    }
-
-    for (int n = 0; n < 4; n++) {
-      int part_idx = r * 4 + n;
-      if (part_idx >= KYO_MAX_PARTITIONS)
-        break;
-
-      int offset = 6 + (n * 16);
-      this->partition_name_[part_idx] = decode_panel_name(&rx[offset], 16);
-      ESP_LOGD(TAG, "Partition %d name: '%s'", part_idx + 1, this->partition_name_[part_idx].c_str());
-    }
-  }
+  return this->read_name_table_chunk_(bases, 2, KYO_MAX_PARTITIONS, this->partition_name_, "Partition");
 }
 
-void BentelKyo::read_code_names_() {
+bool BentelKyo::read_code_names_() {
   // Code names: 16 ASCII bytes per code, 4 per 64-byte read, 24 codes total.
   // KYO32G stores them lower than the non-G map (issue #93): code names
   // at 0x1BB0-0x1D2F instead of 0x3000-0x317F.
   static const uint16_t BASE_ADDRS_NONG[] = {0x3000, 0x3040, 0x3080, 0x30C0, 0x3100, 0x3140};
   static const uint16_t BASE_ADDRS_32G[] = {0x1BB0, 0x1BF0, 0x1C30, 0x1C70, 0x1CB0, 0x1CF0};
-  const uint16_t *BASE_ADDRS =
+  const uint16_t *bases =
       (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
-  int num_reads = 6;  // 24 codes = 6 reads of 4
-
-  for (int r = 0; r < num_reads; r++) {
-    uint8_t rx[255];
-    int count = this->read_register_(BASE_ADDRS[r], 0x3F, rx, 300);
-    if (count < 6 + 64) {
-      ESP_LOGW(TAG, "Code names read at 0x%04X failed: got %d bytes", BASE_ADDRS[r], count);
-      break;
-    }
-
-    for (int n = 0; n < 4; n++) {
-      int code_idx = r * 4 + n;
-      if (code_idx >= KYO_MAX_CODES)
-        break;
-
-      int offset = 6 + (n * 16);
-      this->code_name_[code_idx] = decode_panel_name(&rx[offset], 16);
-      ESP_LOGD(TAG, "Code %d name: '%s'", code_idx + 1, this->code_name_[code_idx].c_str());
-    }
-  }
+  return this->read_name_table_chunk_(bases, 6, KYO_MAX_CODES, this->code_name_, "Code");
 }
 
 void BentelKyo::read_panel_mode_() {

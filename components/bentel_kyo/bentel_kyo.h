@@ -182,15 +182,20 @@ class BentelKyo : public PollingComponent, public uart::UARTDevice {
   void handle_serial_failure_();
   int send_message_(const uint8_t *cmd, int cmd_len, uint8_t *response, uint32_t timeout_ms = SERIAL_TIMEOUT_MS);
   int read_register_(uint16_t address, uint8_t length, uint8_t *response, uint32_t timeout_ms = SERIAL_TIMEOUT_MS);
-  void read_zone_config_();
-  void read_zone_names_();
+  // Config reads are chunked: one 64-byte block per update() cycle, returning true
+  // when the whole table is done, so a single cycle never blocks on multiple reads.
+  bool read_zone_config_();
+  bool read_zone_names_();
   bool read_zone_esn_next_();    // reads one zone ESN per call, returns true when done
-  void read_output_names_();
+  bool read_output_names_();
   void read_partition_config_();
   bool read_keyfob_esn_next_();  // reads one keyfob ESN per call, returns true when done
-  void read_keyfob_names_();
-  void read_partition_names_();
-  void read_code_names_();
+  bool read_keyfob_names_();
+  bool read_partition_names_();
+  bool read_code_names_();
+  // Generic name-table reader: reads one block (up to 4 names) per call into `out`.
+  bool read_name_table_chunk_(const uint16_t *bases, int num_blocks, int count,
+                              std::string *out, const char *what);
   bool read_event_log_next_();  // reads one 64-byte chunk per call, returns true when done
   const char *decode_event_code_(uint16_t code, uint8_t *entity_out, char *buf, size_t buf_len);
   void read_panel_mode_();
@@ -295,7 +300,8 @@ class BentelKyo : public PollingComponent, public uart::UARTDevice {
   bool zone_tamper_memory_[KYO_MAX_ZONES]{};
 
   // Zone configuration (read once from panel config registers, one step per update cycle)
-  uint8_t config_read_step_{0};    // 0=not started, 1-8=reading, 9=done
+  uint8_t config_read_step_{0};    // 0=not started, 1-12=reading, 13=done
+  int config_chunk_index_{0};      // current 64-byte block within a chunked config read
   uint16_t text_sensor_republish_counter_{0};  // re-publish text sensors every 120 cycles (~60s)
   int esn_read_index_{0};          // current zone index for per-zone ESN reads
   int keyfob_read_index_{0};       // current keyfob index for per-slot ESN reads

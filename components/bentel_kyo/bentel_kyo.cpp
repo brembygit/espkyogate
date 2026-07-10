@@ -1147,11 +1147,41 @@ bool BentelKyo::read_zone_config_() {
   return false;
 }
 
+bool BentelKyo::is_kyo8_family_() const {
+  // KYO8W is intentionally excluded. Despite the "KYO8W"/"KYO8WG" firmware name it uses
+  // KYO32-format status/partition responses (issue #107, fixed by PR #109), and the runtime
+  // paths already route it through KYO32 (see the is_kyo8 checks at the partition command
+  // selection and parser). We have no KYO8W config-memory trace, so its name tables and fixed
+  // registers stay on the KYO32 (non-G) map — the pre-#113 behavior — rather than the KYO8
+  // 0x3250 map, until a KYO8W trace confirms its layout.
+  return this->alarm_model_ == AlarmModel::KYO_4 || this->alarm_model_ == AlarmModel::KYO_8 ||
+         this->alarm_model_ == AlarmModel::KYO_8G;
+}
+
+const uint16_t *BentelKyo::select_name_bases_(const uint16_t *nong, const uint16_t *kyo32g,
+                                              const uint16_t *kyo8) const {
+  if (this->alarm_model_ == AlarmModel::KYO_32G)
+    return kyo32g;
+  if (this->is_kyo8_family_())
+    return kyo8;
+  return nong;
+}
+
 // Reads one 64-byte block (up to 4 names) of a name table per call, advancing
 // config_chunk_index_. Returns true when the whole table has been read. Keeps each
 // update() cycle short (one serial transaction) instead of blocking on several.
 bool BentelKyo::read_name_table_chunk_(const uint16_t *bases, int num_blocks, int count,
                                        std::string *out, const char *what) {
+  if (bases == nullptr) {
+    // Address map not yet known for this model (issue #113) — skip rather than decode
+    // garbage from a wrong address. Names stay empty.
+    ESP_LOGW(TAG,
+             "%s names: address map unknown for firmware '%s' — skipped. Please open an issue at "
+             "https://github.com/lorenzo-deluca/espkyogate with a 'serial_trace' dump to map it.",
+             what, this->firmware_version_);
+    this->config_chunk_index_ = 0;
+    return true;
+  }
   int blk = this->config_chunk_index_;
   uint8_t rx[255];
   int rc = this->read_register_(bases[blk], 0x3F, rx, 300);
@@ -1180,8 +1210,11 @@ bool BentelKyo::read_zone_names_() {
   // zone names at 0x19B0-0x1BAF instead of 0x2E00-0x2FFF.
   static const uint16_t BASE_ADDRS_NONG[] = {0x2E00, 0x2E40, 0x2E80, 0x2EC0, 0x2F00, 0x2F40, 0x2F80, 0x2FC0};
   static const uint16_t BASE_ADDRS_32G[] = {0x19B0, 0x19F0, 0x1A30, 0x1A70, 0x1AB0, 0x1AF0, 0x1B30, 0x1B70};
-  const uint16_t *bases =
-      (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
+  // KYO8 2.04 keeps the user-label table higher, starting at 0x3250 (issue #113):
+  // 8 zone names in two 64-byte blocks (0x3250-0x328F, 0x3290-0x32CF). Confirmed against
+  // the 0x009F zone-config block.
+  static const uint16_t BASE_ADDRS_KYO8[] = {0x3250, 0x3290};
+  const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, BASE_ADDRS_KYO8);
   int num_blocks = (this->max_zones_ <= 8) ? 2 : 8;
   return this->read_name_table_chunk_(bases, num_blocks, this->max_zones_, this->zone_name_, "Zone");
 }
@@ -1238,8 +1271,9 @@ bool BentelKyo::read_output_names_() {
   // via an on-device memory scan (issue #93).
   static const uint16_t BASE_ADDRS_NONG[] = {0x3280, 0x32C0, 0x3300, 0x3340};
   static const uint16_t BASE_ADDRS_32G[] = {0x1E30, 0x1E70, 0x1EB0, 0x1EF0};
-  const uint16_t *bases =
-      (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
+  // KYO8 output-name location not yet known (issue #113): the 0x3280 block holds the
+  // contiguous zone/partition/keypad label table, not outputs. Skip until located.
+  const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, nullptr);
   return this->read_name_table_chunk_(bases, 4, KYO_MAX_OUTPUTS, this->output_name_, "Output");
 }
 
@@ -1247,6 +1281,17 @@ void BentelKyo::read_partition_config_() {
   // Timers at 0x016F: 26 bytes total (section 10.5)
   // Bytes 0-15: entry/exit timers (2 bytes per partition: entry, exit) for 8 partitions
   // Bytes 16-23: siren duration (1 byte per partition)
+  if (this->is_kyo8_family_()) {
+    // On KYO8 2.04, 0x016F returns an index table (00 00 01 0X FF FF), not timers
+    // (issue #113). The real area timers live in/after the 0x009F block. Skip until
+    // decoded, leaving the timer values at their defaults. Logged once per config read
+    // (this function is not in the ~60s periodic republish, so it does not spam).
+    ESP_LOGW(TAG,
+             "Partition timers: register address unknown for firmware '%s' — skipped. Please open "
+             "an issue at https://github.com/lorenzo-deluca/espkyogate with a 'serial_trace' dump.",
+             this->firmware_version_);
+    return;
+  }
   uint8_t rx[255];
   int count = this->read_register_(0x016F, 0x1A, rx, 300);
   if (count < 6 + 26) {
@@ -1310,8 +1355,9 @@ bool BentelKyo::read_keyfob_names_() {
   // at 0x1D30-0x1E2F instead of 0x3180-0x327F.
   static const uint16_t BASE_ADDRS_NONG[] = {0x3180, 0x31C0, 0x3200, 0x3240};
   static const uint16_t BASE_ADDRS_32G[] = {0x1D30, 0x1D70, 0x1DB0, 0x1DF0};
-  const uint16_t *bases =
-      (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
+  // KYO8 keyfob-name location not yet known (issue #113): 0x3180-0x324F reads the LCD
+  // menu-string ROM on this firmware. Skip until located.
+  const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, nullptr);
   return this->read_name_table_chunk_(bases, 4, KYO_MAX_KEYFOBS, this->keyfob_name_, "Keyfob");
 }
 
@@ -1321,9 +1367,16 @@ bool BentelKyo::read_partition_names_() {
   // at 0x1750-0x17CF instead of 0x2BA0-0x2C1F.
   static const uint16_t BASE_ADDRS_NONG[] = {0x2BA0, 0x2BE0};
   static const uint16_t BASE_ADDRS_32G[] = {0x1750, 0x1790};
-  const uint16_t *bases =
-      (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
-  return this->read_name_table_chunk_(bases, 2, KYO_MAX_PARTITIONS, this->partition_name_, "Partition");
+  // KYO8 2.04: the area names sit at 0x32D0 (PERIMETRO, VOLUMETRICI, Area 03, Area 04),
+  // right after the 8 zone names (issue #113). KYO4/8 have 4 partitions (see the
+  // ranges_kyo8 table in decode_event_code_), so a single 64-byte block covers them;
+  // 0x3310+ holds keypad labels, which is why only 4 slots are read.
+  static const uint16_t BASE_ADDRS_KYO8[] = {0x32D0};
+  const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, BASE_ADDRS_KYO8);
+  bool kyo8 = this->is_kyo8_family_();
+  int num_blocks = kyo8 ? 1 : 2;
+  int count = kyo8 ? KYO_PARTITIONS_8 : KYO_MAX_PARTITIONS;
+  return this->read_name_table_chunk_(bases, num_blocks, count, this->partition_name_, "Partition");
 }
 
 bool BentelKyo::read_code_names_() {
@@ -1332,12 +1385,20 @@ bool BentelKyo::read_code_names_() {
   // at 0x1BB0-0x1D2F instead of 0x3000-0x317F.
   static const uint16_t BASE_ADDRS_NONG[] = {0x3000, 0x3040, 0x3080, 0x30C0, 0x3100, 0x3140};
   static const uint16_t BASE_ADDRS_32G[] = {0x1BB0, 0x1BF0, 0x1C30, 0x1C70, 0x1CB0, 0x1CF0};
-  const uint16_t *bases =
-      (this->alarm_model_ == AlarmModel::KYO_32G) ? BASE_ADDRS_32G : BASE_ADDRS_NONG;
+  // KYO8 code-name location not yet known (issue #113): 0x3000-0x30BF reads binary config
+  // and 0x30C0+ the LCD menu-string ROM on this firmware. Skip until located.
+  const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, nullptr);
   return this->read_name_table_chunk_(bases, 6, KYO_MAX_CODES, this->code_name_, "Code");
 }
 
 void BentelKyo::read_panel_mode_() {
+  if (this->is_kyo8_family_()) {
+    // 0x01E6 is not the panel-mode register on KYO8 2.04 — it returns 00 00, which the
+    // {0x11,0x10} idle baseline reads as a permanent false programming=YES (issue #113).
+    // Leave panel_programming_mode_ at its idle default; the real state, if needed, is in
+    // the continuous F0 68 status poll.
+    return;
+  }
   uint8_t rx[255];
   int count = this->read_register_(0x01E6, 0x02, rx, 300);
   if (count < 6 + 2) {
@@ -1356,6 +1417,12 @@ void BentelKyo::read_panel_mode_() {
 }
 
 void BentelKyo::read_status_flags_() {
+  if (this->is_kyo8_family_()) {
+    // 0x1503 reads ASCII text, not trouble bit-flags, on KYO8 2.04, which the "any byte
+    // != 0xFF" rule reads as a permanent false trouble=YES (issue #113). Leave
+    // trouble_active_ at its no-trouble default until the real register is located.
+    return;
+  }
   uint8_t rx[255];
   int count = this->read_register_(0x1503, 0x05, rx, 300);
   if (count < 6 + 5) {
@@ -1589,17 +1656,22 @@ void BentelKyo::publish_text_sensors_() {
         if (idx >= KYO_MAX_KEYFOBS) continue;
         entry.sensor->publish_state(this->keyfob_name_[idx].empty() ? "N/A" : this->keyfob_name_[idx]);
         break;
+      // Partition timers come from 0x016F, which is unmapped on the KYO8 family (issue #113);
+      // publish "N/A" there instead of the default 0 so the value isn't mistaken for a real one.
       case TEXT_PARTITION_ENTRY_DELAY:
         if (idx >= KYO_MAX_PARTITIONS) continue;
-        entry.sensor->publish_state(to_string(this->partition_entry_delay_[idx]) + "s");
+        entry.sensor->publish_state(this->is_kyo8_family_() ? "N/A"
+                                                            : to_string(this->partition_entry_delay_[idx]) + "s");
         break;
       case TEXT_PARTITION_EXIT_DELAY:
         if (idx >= KYO_MAX_PARTITIONS) continue;
-        entry.sensor->publish_state(to_string(this->partition_exit_delay_[idx]) + "s");
+        entry.sensor->publish_state(this->is_kyo8_family_() ? "N/A"
+                                                            : to_string(this->partition_exit_delay_[idx]) + "s");
         break;
       case TEXT_PARTITION_SIREN_TIMER:
         if (idx >= KYO_MAX_PARTITIONS) continue;
-        entry.sensor->publish_state(to_string(this->partition_siren_timer_[idx]));
+        entry.sensor->publish_state(this->is_kyo8_family_() ? "N/A"
+                                                            : to_string(this->partition_siren_timer_[idx]));
         break;
       case TEXT_PARTITION_NAME:
         if (idx >= KYO_MAX_PARTITIONS) continue;

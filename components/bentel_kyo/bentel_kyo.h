@@ -28,6 +28,7 @@ static const char *const TAG = "bentel_kyo";
 static const uint8_t KYO_MAX_ZONES = 32;
 static const uint8_t KYO_MAX_ZONES_8 = 8;
 static const uint8_t KYO_MAX_PARTITIONS = 8;
+static const uint8_t KYO_PARTITIONS_8 = 4;  // KYO4/8 expose 4 partitions (see decode_event_code_)
 static const uint8_t KYO_MAX_OUTPUTS = 16;
 static const uint8_t KYO_MAX_KEYFOBS = 16;
 static const uint8_t KYO_MAX_CODES = 24;
@@ -182,6 +183,16 @@ class BentelKyo : public PollingComponent, public uart::UARTDevice {
   void handle_serial_failure_();
   int send_message_(const uint8_t *cmd, int cmd_len, uint8_t *response, uint32_t timeout_ms = SERIAL_TIMEOUT_MS);
   int read_register_(uint16_t address, uint8_t length, uint8_t *response, uint32_t timeout_ms = SERIAL_TIMEOUT_MS);
+  // Model-family helper (issue #113): KYO4/8/8G use a config memory map distinct from both
+  // KYO32 (non-G) and KYO32G, so config-table addresses must branch three ways. KYO8W is
+  // excluded — it uses KYO32-format runtime responses (issue #107/PR #109) and has no
+  // validated KYO8 config trace; see the definition for details.
+  bool is_kyo8_family_() const;
+  // Selects the per-model base-address map for a config table. Returns nullptr when the
+  // table location is not yet known for the current model, so the reader skips it instead
+  // of decoding garbage from the wrong address.
+  const uint16_t *select_name_bases_(const uint16_t *nong, const uint16_t *kyo32g,
+                                     const uint16_t *kyo8) const;
   // Config reads are chunked: one 64-byte block per update() cycle, returning true
   // when the whole table is done, so a single cycle never blocks on multiple reads.
   bool read_zone_config_();

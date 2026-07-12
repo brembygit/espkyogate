@@ -1271,11 +1271,16 @@ bool BentelKyo::read_output_names_() {
   // via an on-device memory scan (issue #93).
   static const uint16_t BASE_ADDRS_NONG[] = {0x3280, 0x32C0, 0x3300, 0x3340};
   static const uint16_t BASE_ADDRS_32G[] = {0x1E30, 0x1E70, 0x1EB0, 0x1EF0};
-  // KYO8 output-name location not yet known (issue #113): the memory scan mapped the
-  // user-label table 0x3250-0x35FF (zones, areas, keypads, readers, codes) and it holds
-  // no output labels — they may follow the code names at 0x3600+. Skip until located.
-  const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, nullptr);
-  return this->read_name_table_chunk_(bases, 4, KYO_MAX_OUTPUTS, this->output_name_, "Output");
+  // KYO8 2.04: output names live at 0x3710, after the activator labels 0x3610-0x370F, in
+  // the contiguous user-label table (issue #113 memory scan). KYO4/8 expose 5 outputs
+  // (status bits 0-4), so two 64-byte blocks cover slots 1-5; 0x3760+ holds phone-number
+  // labels, which is why only 5 slots are read.
+  static const uint16_t BASE_ADDRS_KYO8[] = {0x3710, 0x3750};
+  const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, BASE_ADDRS_KYO8);
+  bool kyo8 = this->is_kyo8_family_();
+  int num_blocks = kyo8 ? 2 : 4;
+  int count = kyo8 ? KYO_OUTPUTS_8 : KYO_MAX_OUTPUTS;
+  return this->read_name_table_chunk_(bases, num_blocks, count, this->output_name_, "Output");
 }
 
 void BentelKyo::read_partition_config_() {
@@ -1358,10 +1363,14 @@ bool BentelKyo::read_keyfob_names_() {
   // at 0x1D30-0x1E2F instead of 0x3180-0x327F.
   static const uint16_t BASE_ADDRS_NONG[] = {0x3180, 0x31C0, 0x3200, 0x3240};
   static const uint16_t BASE_ADDRS_32G[] = {0x1D30, 0x1D70, 0x1DB0, 0x1DF0};
-  // KYO8 keyfob-name location not yet known (issue #113): the memory scan shows the label
-  // table holds reader labels ("Lettore 01".."Lettore 16") at 0x3390-0x348F, but no keyfob
-  // (key) labels; they may follow the code names at 0x3600+, or not exist on this firmware.
-  // Skip rather than publish reader labels as keyfob names.
+  // KYO8 2.04 has no per-keyfob name table (issue #113): the memory scan mapped the whole
+  // user-label table 0x3250-0x37EF (zones, areas, keypads, readers, codes, activators,
+  // outputs, phone numbers) and it ends with a single generic "Chiave" slot at 0x37E0,
+  // followed by ROM date-format strings. Skip silently — this is a confirmed absence, not
+  // an unmapped table, so the "please open an issue" warning would be misleading. The
+  // keyfob name sensors stay at "N/A".
+  if (this->is_kyo8_family_())
+    return true;
   const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, nullptr);
   return this->read_name_table_chunk_(bases, 4, KYO_MAX_KEYFOBS, this->keyfob_name_, "Keyfob");
 }

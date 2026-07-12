@@ -30,6 +30,7 @@ static const uint8_t KYO_MAX_ZONES_8 = 8;
 static const uint8_t KYO_MAX_PARTITIONS = 8;
 static const uint8_t KYO_PARTITIONS_8 = 4;  // KYO4/8 expose 4 partitions (see decode_event_code_)
 static const uint8_t KYO_MAX_OUTPUTS = 16;
+static const uint8_t KYO_OUTPUTS_8 = 5;  // KYO4/8 expose 5 outputs (status bits 0-4)
 static const uint8_t KYO_MAX_KEYFOBS = 16;
 static const uint8_t KYO_MAX_CODES = 24;
 

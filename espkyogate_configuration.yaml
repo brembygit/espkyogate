@@ -336,6 +336,12 @@ button:
     bentel_kyo_id: kyo
     type: read_event_log
     name: "Read Event Log"
+  # Debug: dumps unmapped config regions to the log (issue #113) — press once and
+  # attach the "SCAN 0x...." log lines to the issue
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: memory_scan
+    name: "Memory Scan (Debug)"
 
   # Datetime sync — sends current NTP time to the alarm panel
   - platform: bentel_kyo

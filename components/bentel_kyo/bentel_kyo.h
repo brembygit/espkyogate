@@ -144,6 +144,7 @@ class BentelKyo : public PollingComponent, public uart::UARTDevice {
   void arm_preset(uint8_t total_mask, uint8_t partial_mask, uint8_t partial_d0_mask);
   void reset_alarms();
   void read_event_log();
+  void memory_scan();  // debug: dump unmapped config regions to the log (issue #113)
   void activate_output(uint8_t output_number);
   void deactivate_output(uint8_t output_number);
   void pulse_output(uint8_t output_number, uint32_t pulse_time_ms);
@@ -209,6 +210,7 @@ class BentelKyo : public PollingComponent, public uart::UARTDevice {
   bool read_name_table_chunk_(const uint16_t *bases, int num_blocks, int count,
                               std::string *out, const char *what);
   bool read_event_log_next_();  // reads one 64-byte chunk per call, returns true when done
+  bool memory_scan_next_();     // reads one 64-byte chunk per call, returns true when done
   const char *decode_event_code_(uint16_t code, uint8_t *entity_out, char *buf, size_t buf_len);
   void read_panel_mode_();
   void read_status_flags_();
@@ -345,6 +347,10 @@ class BentelKyo : public PollingComponent, public uart::UARTDevice {
   bool event_log_read_pending_{false};
   int event_log_chunk_index_{0};
   int event_log_entries_logged_{0};
+
+  // Debug memory scan (on-demand via button, issue #113)
+  bool memory_scan_pending_{false};
+  int memory_scan_chunk_index_{0};
 };
 
 }  // namespace bentel_kyo

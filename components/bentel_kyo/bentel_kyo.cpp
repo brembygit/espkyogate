@@ -236,6 +236,12 @@ void BentelKyo::read_event_log() {
   this->event_log_entries_logged_ = 0;
 }
 
+void BentelKyo::memory_scan() {
+  ESP_LOGI(TAG, "Memory scan requested — dumping unmapped config regions (issue #113)...");
+  this->memory_scan_pending_ = true;
+  this->memory_scan_chunk_index_ = 0;
+}
+
 void BentelKyo::set_polling_enabled(bool enabled) {
   if (this->polling_enabled_ == enabled)
     return;
@@ -306,6 +312,13 @@ void BentelKyo::update() {
   if (this->event_log_read_pending_) {
     if (this->read_event_log_next_())
       this->event_log_read_pending_ = false;
+    return;  // Skip normal polling this cycle
+  }
+
+  // On-demand debug memory scan (triggered by memory_scan button, issue #113)
+  if (this->memory_scan_pending_) {
+    if (this->memory_scan_next_())
+      this->memory_scan_pending_ = false;
     return;  // Skip normal polling this cycle
   }
 
@@ -1660,6 +1673,59 @@ bool BentelKyo::read_event_log_next_() {
   }
 
   this->event_log_chunk_index_++;
+  return false;
+}
+
+// Debug helper for issue #113: dumps memory regions whose KYO8 layout is still unknown,
+// one 64-byte read per update() cycle, as hex + printable ASCII rows (16 bytes per row,
+// matching the 16-byte name-slot size so label tables line up visually).
+//
+// Regions scanned:
+// - 0x3380-0x35FF: continuation of the KYO8 user-label table. Zone (0x3250), area (0x32D0)
+//   and keypad (0x3310) labels are known; output/keyfob/code names should follow here.
+// - 0x00DF-0x021E: region after the zone-config block 0x009F, where the KYO8 area timers
+//   (Tempi -> Aree) are expected, spanning the 0x016F index table and 0x01E6 neighborhood.
+bool BentelKyo::memory_scan_next_() {
+  static const uint16_t SCAN_ADDRS[] = {
+      // label-table continuation
+      0x3380, 0x33C0, 0x3400, 0x3440, 0x3480, 0x34C0, 0x3500, 0x3540, 0x3580, 0x35C0,
+      // timer / fixed-register neighborhood
+      0x00DF, 0x011F, 0x015F, 0x019F, 0x01DF,
+  };
+  static const int SCAN_CHUNKS = sizeof(SCAN_ADDRS) / sizeof(SCAN_ADDRS[0]);
+
+  int chunk = this->memory_scan_chunk_index_;
+  if (chunk >= SCAN_CHUNKS) {
+    ESP_LOGI(TAG, "Memory scan complete — please attach the SCAN lines above to issue #113");
+    return true;
+  }
+
+  uint16_t addr = SCAN_ADDRS[chunk];
+  ESP_LOGI(TAG, "Memory scan chunk %d/%d (0x%04X)", chunk + 1, SCAN_CHUNKS, addr);
+
+  uint8_t rx[255];
+  int count = this->read_register_(addr, 0x3F, rx, 500);
+  if (count < 6 + 64) {
+    ESP_LOGW(TAG, "SCAN 0x%04X: read failed (%d bytes) — register may not exist on this panel", addr, count);
+    this->memory_scan_chunk_index_++;
+    return false;
+  }
+
+  // 4 rows of 16 bytes: hex dump + printable ASCII (non-printable -> '.')
+  for (int row = 0; row < 4; row++) {
+    const uint8_t *p = &rx[6 + row * 16];
+    char hex[16 * 3 + 1];
+    char ascii[16 + 1];
+    for (int i = 0; i < 16; i++) {
+      snprintf(&hex[i * 3], 4, "%02X ", p[i]);
+      ascii[i] = (p[i] >= 0x20 && p[i] <= 0x7E) ? (char) p[i] : '.';
+    }
+    hex[16 * 3 - 1] = '\0';
+    ascii[16] = '\0';
+    ESP_LOGI(TAG, "SCAN 0x%04X: %s |%s|", addr + row * 16, hex, ascii);
+  }
+
+  this->memory_scan_chunk_index_++;
   return false;
 }
 

@@ -31,6 +31,10 @@ BentelKyoReadEventLogButton = bentel_kyo_ns.class_(
     "BentelKyoReadEventLogButton", button.Button, cg.Component
 )
 
+BentelKyoMemoryScanButton = bentel_kyo_ns.class_(
+    "BentelKyoMemoryScanButton", button.Button, cg.Component
+)
+
 BentelKyoActivateOutputButton = bentel_kyo_ns.class_(
     "BentelKyoActivateOutputButton", button.Button, cg.Component
 )
@@ -70,6 +74,7 @@ BUTTON_TYPES = {
     "arm_preset": (BentelKyoArmPresetButton, "mdi:shield-account", None),
     "reset_alarms": (BentelKyoResetAlarmsButton, "mdi:bell-cancel", None),
     "read_event_log": (BentelKyoReadEventLogButton, "mdi:history", ENTITY_CATEGORY_CONFIG),
+    "memory_scan": (BentelKyoMemoryScanButton, "mdi:magnify-scan", ENTITY_CATEGORY_CONFIG),
     "activate_output": (BentelKyoActivateOutputButton, "mdi:electric-switch", None),
     "deactivate_output": (BentelKyoDeactivateOutputButton, "mdi:electric-switch-closed", None),
     "pulse_output": (BentelKyoPulseOutputButton, "mdi:pulse", None),

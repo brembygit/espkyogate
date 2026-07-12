@@ -704,6 +704,39 @@ are not a single uniform offset from the non-G map, so each table is mapped
 individually. The component selects these addresses when the detected model is
 KYO32G (see `read_*_names_()` in `bentel_kyo.cpp`).
 
+### 9.2 KYO8 name table layout (firmware 2.04)
+
+The KYO4/8/8G family uses a third, distinct label-table layout, mapped via an
+on-device memory scan on a KYO8 2.04 (issue #113). The non-G addresses respond
+but land on the LCD menu-string ROM (`0x30C0`-`0x324F`) or unrelated data. The
+user-label table is one contiguous block at `0x3250`-`0x37EF`, in a different
+entity order than the non-G map:
+
+| Table | KYO8 base | Count | Default labels |
+|-------|-----------|-------|----------------|
+| Zone names | `0x3250` | 8 | `Zona N` |
+| Partition (area) names | `0x32D0` | 4 | `Area 0N` |
+| Keypad names | `0x3310` | 8 | `Tastiera 0N` |
+| Reader names | `0x3390` | 16 | `Lettore NN` |
+| Code names | `0x3490` | 24 | `Codice N` |
+| Keyfob (digital key) names | `0x3610` | 16 | `Attivatore N` |
+| Output names | `0x3710` | 5 | `Uscita N` |
+| Phone number names | `0x3760` | 8 | `Numero N` |
+
+The table ends with a single generic `Chiave` slot at `0x37E0` followed by ROM
+date-format strings (`GMA`/`MGA`/`AMG`). Entity counts follow the KYO8 hardware
+(4 partitions, 5 outputs); "attivatore" is Bentel's term for the digital keys
+presented to readers, matching the non-G "digital key names" table by relative
+position and count.
+
+Other KYO8 2.04 findings from the same scan:
+
+- The KYO32 fixed registers do not apply: `0x01E6` (panel mode) reads `00 00`,
+  `0x1503` (status flags) reads ASCII text, `0x016F` (partition timers) reads a
+  6-byte-record index table, and `0x01DF`-`0x021E` is all zeros.
+- The area timers (`Tempi -> Aree`) live around `0x00DC`-`0x00EF`, immediately
+  after the zone-config block; the per-field layout is not yet decoded.
+
 ---
 
 ## 10. Configuration Register Map

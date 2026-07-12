@@ -1363,15 +1363,13 @@ bool BentelKyo::read_keyfob_names_() {
   // at 0x1D30-0x1E2F instead of 0x3180-0x327F.
   static const uint16_t BASE_ADDRS_NONG[] = {0x3180, 0x31C0, 0x3200, 0x3240};
   static const uint16_t BASE_ADDRS_32G[] = {0x1D30, 0x1D70, 0x1DB0, 0x1DF0};
-  // KYO8 2.04 has no per-keyfob name table (issue #113): the memory scan mapped the whole
-  // user-label table 0x3250-0x37EF (zones, areas, keypads, readers, codes, activators,
-  // outputs, phone numbers) and it ends with a single generic "Chiave" slot at 0x37E0,
-  // followed by ROM date-format strings. Skip silently — this is a confirmed absence, not
-  // an unmapped table, so the "please open an issue" warning would be misleading. The
-  // keyfob name sensors stay at "N/A".
-  if (this->is_kyo8_family_())
-    return true;
-  const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, nullptr);
+  // KYO8 2.04: keyfob (digital key) names live at 0x3610, labelled "Attivatore 1-16" by
+  // default (issue #113 memory scan). The table sits between the code and output names
+  // with 16 slots — the same relative position and count as the non-G "digital key names"
+  // table (see PROTOCOL.md section 9.1) — "attivatore" being Bentel's term for the digital
+  // keys presented to readers.
+  static const uint16_t BASE_ADDRS_KYO8[] = {0x3610, 0x3650, 0x3690, 0x36D0};
+  const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, BASE_ADDRS_KYO8);
   return this->read_name_table_chunk_(bases, 4, KYO_MAX_KEYFOBS, this->keyfob_name_, "Keyfob");
 }
 

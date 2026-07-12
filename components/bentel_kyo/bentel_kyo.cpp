@@ -1680,19 +1680,16 @@ bool BentelKyo::read_event_log_next_() {
 // one 64-byte read per update() cycle, as hex + printable ASCII rows (16 bytes per row,
 // matching the 16-byte name-slot size so label tables line up visually).
 //
-// Regions scanned (v2 — updated after the first scan mapped 0x3380-0x35FF and 0x00DF-0x021E):
-// - 0x3600-0x37FF: past the end of the known label table (zones 0x3250, areas 0x32D0,
-//   keypads 0x3310, readers 0x3390, codes 0x3490-0x35FF). Output and keyfob labels were
-//   not in the scanned range and, if they exist, should be here.
-// - 0x00DF: the area-timer block found by the first scan (values match the configured
-//   timers but the field layout is unconfirmed). Kept so a differential capture — change
-//   one timer on the keypad, rescan, diff this row — can pin each field.
+// Regions scanned (v3 — the label table is fully mapped; only the timer block remains):
+// - 0x009F + 0x00DF: contiguous coverage of 0x009F-0x011E. The v2 scan started at 0x00DF
+//   and missed the 3-byte blind spot 0x00DC-0x00DE, only reachable through the tail of the
+//   0x009F zone-config read — a differential capture (P1 exit 30s->25s) changed nothing in
+//   0x00DF+, placing P1 exit exactly in that blind spot. Working layout hypothesis:
+//   exit P1-P4 @ 0x00DC, entry P1-P4 @ 0x00E0, pre-alarm @ 0x00E4, then 05x4 and 0Ax4.
 bool BentelKyo::memory_scan_next_() {
   static const uint16_t SCAN_ADDRS[] = {
-      // label-table continuation past the code names
-      0x3600, 0x3640, 0x3680, 0x36C0, 0x3700, 0x3740, 0x3780, 0x37C0,
-      // area-timer block, for differential timer capture
-      0x00DF,
+      // zone-config block + timer region, contiguous (covers the 0x00DC-0x00DE blind spot)
+      0x009F, 0x00DF,
   };
   static const int SCAN_CHUNKS = sizeof(SCAN_ADDRS) / sizeof(SCAN_ADDRS[0]);
 

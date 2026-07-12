@@ -734,8 +734,19 @@ Other KYO8 2.04 findings from the same scan:
 - The KYO32 fixed registers do not apply: `0x01E6` (panel mode) reads `00 00`,
   `0x1503` (status flags) reads ASCII text, `0x016F` (partition timers) reads a
   6-byte-record index table, and `0x01DF`-`0x021E` is all zeros.
-- The area timers (`Tempi -> Aree`) live around `0x00DC`-`0x00EF`, immediately
-  after the zone-config block; the per-field layout is not yet decoded.
+- The area timers (`Tempi -> Aree`) live at `0x00DC`, immediately after the
+  zone-config block. Layout confirmed by differential capture (changing P1 exit
+  30s -> 25s flipped exactly `0x00DC` from `1E` to `19`):
+
+  | Address | Field | Unit |
+  |---------|-------|------|
+  | `0x00DC`-`0x00DF` | Exit delay, partitions 1-4 | seconds |
+  | `0x00E0`-`0x00E3` | Entry delay, partitions 1-4 | seconds |
+  | `0x00E4`-`0x00E7` | Pre-alarm time, partitions 1-4 | minutes |
+  | `0x00E8`-`0x00EB` | Unconfirmed (matches configured anti-zone count) | — |
+  | `0x00EC`-`0x00EF` | Unconfirmed (matches configured anti-code time) | seconds |
+
+  The siren-duration byte has not been identified yet.
 
 ---
 

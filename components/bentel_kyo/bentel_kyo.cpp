@@ -1288,16 +1288,26 @@ void BentelKyo::read_partition_config_() {
   // Bytes 0-15: entry/exit timers (2 bytes per partition: entry, exit) for 8 partitions
   // Bytes 16-23: siren duration (1 byte per partition)
   if (this->is_kyo8_family_()) {
-    // On KYO8 2.04, 0x016F returns an index table (00 00 01 0X FF FF), not timers
-    // (issue #113). The memory scan places the real area timers around 0x00DC-0x00EF,
-    // right after the zone-config block (all configured values match there), but the
-    // per-field layout is unconfirmed — a differential capture (change one timer,
-    // rescan) is needed before decoding. Skip until then, leaving the defaults.
-    // Logged once per config read (not in the ~60s periodic republish, so no spam).
-    ESP_LOGW(TAG,
-             "Partition timers: register layout not yet decoded for firmware '%s' — skipped. See "
-             "https://github.com/lorenzo-deluca/espkyogate/issues/113",
-             this->firmware_version_);
+    // KYO8 2.04 keeps the area timers right after the zone-config block, not at 0x016F
+    // (which returns an index table on this firmware). Layout confirmed by a differential
+    // capture on issue #113 (P1 exit 30s->25s flipped exactly 0x00DC from 1E to 19):
+    //   0x00DC-0x00DF: exit delay P1-P4 (seconds)
+    //   0x00E0-0x00E3: entry delay P1-P4 (seconds)
+    //   0x00E4-0x00E7: pre-alarm P1-P4 (minutes, not currently exposed)
+    // The siren-duration byte has not been identified yet — it stays at its default and
+    // the siren text sensor publishes "N/A" on this family.
+    uint8_t rx[255];
+    int count = this->read_register_(0x00DC, 0x08, rx, 300);
+    if (count < 6 + 8) {
+      ESP_LOGW(TAG, "KYO8 timer read at 0x00DC failed: got %d bytes", count);
+      return;
+    }
+    for (int i = 0; i < KYO_PARTITIONS_8; i++) {
+      this->partition_exit_delay_[i] = rx[6 + i];
+      this->partition_entry_delay_[i] = rx[6 + 4 + i];
+      ESP_LOGD(TAG, "Partition %d: entry=%ds, exit=%ds", i + 1,
+               this->partition_entry_delay_[i], this->partition_exit_delay_[i]);
+    }
     return;
   }
   uint8_t rx[255];
@@ -1670,17 +1680,20 @@ void BentelKyo::publish_text_sensors_() {
         if (idx >= KYO_MAX_KEYFOBS) continue;
         entry.sensor->publish_state(this->keyfob_name_[idx].empty() ? "N/A" : this->keyfob_name_[idx]);
         break;
-      // Partition timers come from 0x016F, which is unmapped on the KYO8 family (issue #113);
-      // publish "N/A" there instead of the default 0 so the value isn't mistaken for a real one.
+      // On the KYO8 family entry/exit delays are decoded from 0x00DC for partitions 1-4
+      // (issue #113); higher partition slots and the siren duration (byte not yet
+      // identified) publish "N/A" so a default 0 isn't mistaken for a real value.
       case TEXT_PARTITION_ENTRY_DELAY:
         if (idx >= KYO_MAX_PARTITIONS) continue;
-        entry.sensor->publish_state(this->is_kyo8_family_() ? "N/A"
-                                                            : to_string(this->partition_entry_delay_[idx]) + "s");
+        entry.sensor->publish_state(this->is_kyo8_family_() && idx >= KYO_PARTITIONS_8
+                                        ? "N/A"
+                                        : to_string(this->partition_entry_delay_[idx]) + "s");
         break;
       case TEXT_PARTITION_EXIT_DELAY:
         if (idx >= KYO_MAX_PARTITIONS) continue;
-        entry.sensor->publish_state(this->is_kyo8_family_() ? "N/A"
-                                                            : to_string(this->partition_exit_delay_[idx]) + "s");
+        entry.sensor->publish_state(this->is_kyo8_family_() && idx >= KYO_PARTITIONS_8
+                                        ? "N/A"
+                                        : to_string(this->partition_exit_delay_[idx]) + "s");
         break;
       case TEXT_PARTITION_SIREN_TIMER:
         if (idx >= KYO_MAX_PARTITIONS) continue;

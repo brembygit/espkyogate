@@ -1271,8 +1271,9 @@ bool BentelKyo::read_output_names_() {
   // via an on-device memory scan (issue #93).
   static const uint16_t BASE_ADDRS_NONG[] = {0x3280, 0x32C0, 0x3300, 0x3340};
   static const uint16_t BASE_ADDRS_32G[] = {0x1E30, 0x1E70, 0x1EB0, 0x1EF0};
-  // KYO8 output-name location not yet known (issue #113): the 0x3280 block holds the
-  // contiguous zone/partition/keypad label table, not outputs. Skip until located.
+  // KYO8 output-name location not yet known (issue #113): the memory scan mapped the
+  // user-label table 0x3250-0x35FF (zones, areas, keypads, readers, codes) and it holds
+  // no output labels — they may follow the code names at 0x3600+. Skip until located.
   const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, nullptr);
   return this->read_name_table_chunk_(bases, 4, KYO_MAX_OUTPUTS, this->output_name_, "Output");
 }
@@ -1283,12 +1284,14 @@ void BentelKyo::read_partition_config_() {
   // Bytes 16-23: siren duration (1 byte per partition)
   if (this->is_kyo8_family_()) {
     // On KYO8 2.04, 0x016F returns an index table (00 00 01 0X FF FF), not timers
-    // (issue #113). The real area timers live in/after the 0x009F block. Skip until
-    // decoded, leaving the timer values at their defaults. Logged once per config read
-    // (this function is not in the ~60s periodic republish, so it does not spam).
+    // (issue #113). The memory scan places the real area timers around 0x00DC-0x00EF,
+    // right after the zone-config block (all configured values match there), but the
+    // per-field layout is unconfirmed — a differential capture (change one timer,
+    // rescan) is needed before decoding. Skip until then, leaving the defaults.
+    // Logged once per config read (not in the ~60s periodic republish, so no spam).
     ESP_LOGW(TAG,
-             "Partition timers: register address unknown for firmware '%s' — skipped. Please open "
-             "an issue at https://github.com/lorenzo-deluca/espkyogate with a 'serial_trace' dump.",
+             "Partition timers: register layout not yet decoded for firmware '%s' — skipped. See "
+             "https://github.com/lorenzo-deluca/espkyogate/issues/113",
              this->firmware_version_);
     return;
   }
@@ -1355,8 +1358,10 @@ bool BentelKyo::read_keyfob_names_() {
   // at 0x1D30-0x1E2F instead of 0x3180-0x327F.
   static const uint16_t BASE_ADDRS_NONG[] = {0x3180, 0x31C0, 0x3200, 0x3240};
   static const uint16_t BASE_ADDRS_32G[] = {0x1D30, 0x1D70, 0x1DB0, 0x1DF0};
-  // KYO8 keyfob-name location not yet known (issue #113): 0x3180-0x324F reads the LCD
-  // menu-string ROM on this firmware. Skip until located.
+  // KYO8 keyfob-name location not yet known (issue #113): the memory scan shows the label
+  // table holds reader labels ("Lettore 01".."Lettore 16") at 0x3390-0x348F, but no keyfob
+  // (key) labels; they may follow the code names at 0x3600+, or not exist on this firmware.
+  // Skip rather than publish reader labels as keyfob names.
   const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, nullptr);
   return this->read_name_table_chunk_(bases, 4, KYO_MAX_KEYFOBS, this->keyfob_name_, "Keyfob");
 }
@@ -1385,9 +1390,11 @@ bool BentelKyo::read_code_names_() {
   // at 0x1BB0-0x1D2F instead of 0x3000-0x317F.
   static const uint16_t BASE_ADDRS_NONG[] = {0x3000, 0x3040, 0x3080, 0x30C0, 0x3100, 0x3140};
   static const uint16_t BASE_ADDRS_32G[] = {0x1BB0, 0x1BF0, 0x1C30, 0x1C70, 0x1CB0, 0x1CF0};
-  // KYO8 code-name location not yet known (issue #113): 0x3000-0x30BF reads binary config
-  // and 0x30C0+ the LCD menu-string ROM on this firmware. Skip until located.
-  const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, nullptr);
+  // KYO8 2.04: code names live at 0x3490, after the reader labels 0x3390-0x348F, in the
+  // contiguous user-label table (located via the issue #113 on-device memory scan; slot 1
+  // matched the panel's configured code name). 24 slots of 16 bytes, 6 blocks of 4.
+  static const uint16_t BASE_ADDRS_KYO8[] = {0x3490, 0x34D0, 0x3510, 0x3550, 0x3590, 0x35D0};
+  const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, BASE_ADDRS_KYO8);
   return this->read_name_table_chunk_(bases, 6, KYO_MAX_CODES, this->code_name_, "Code");
 }
 

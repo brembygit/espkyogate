@@ -1128,12 +1128,11 @@ bool BentelKyo::read_zone_config_() {
     ESP_LOGW(TAG, "Zone config read at 0x%04X failed: got %d bytes", BASE_ADDRS[blk], count);
   } else {
     // KYO8 2.04 prefixes the block with a 4-byte header, so zone records start at 0x00A3
-    // instead of 0x009F (issue #113 validation: with the shift, zones 1-4 land in area 1
-    // and zones 5-6 in area 2, matching the panel's PERIMETRO/VOLUMETRICI assignment;
-    // without it zone 1 reads area 0x00 = "None").
+    // instead of 0x009F (issue #113 validation: with the shift, every zone lands in the
+    // area configured on the panel; without it zone 1 reads area 0x00 = "None").
     // KYO8 record bytes, cross-checked against the Bentel Security Suite zone page:
     // [0]=type, [1]=unknown (always 0x00, NOT a wireless-enrolled flag), [2]=area mask,
-    // [3]=alarm-cycle count "Cicli" (0-14; 0x0F = "Ripetitivo"/unlimited).
+    // [3]=alarm-cycle count (0-14; 0x0F = repetitive/unlimited).
     // The header also means only 15 full records fit in the 64 returned bytes — cap the
     // loop so a hypothetical >8-zone KYO8 read can never index past the buffer.
     bool kyo8 = this->is_kyo8_family_();
@@ -1310,16 +1309,16 @@ void BentelKyo::read_partition_config_() {
   if (this->is_kyo8_family_()) {
     // KYO8 2.04 keeps the area timers right after the zone-config block, not at 0x016F
     // (which returns an index table on this firmware). Layout pinned by differential
-    // captures and cross-checked against the Bentel Security Suite "Aree" page
-    // (issue #113); official field names:
-    //   0x00DC-0x00DF: "T. Uscita"  — exit delay P1-P4 (seconds)
-    //   0x00E0-0x00E3: "T. Ingresso" — entry delay P1-P4 (seconds)
-    //   0x00E4-0x00E7: "T. Preavviso" — scheduler advance-warning P1-P4 (minutes)
-    //   0x00E8-0x00EB: "T. And Zone" P1-P4 (15-second steps)
-    //   0x00EC-0x00EF: "T. Cod And" P1-P4 (seconds)
-    //   0x00F8:        "Tempo di Ronda" — patrol time (minutes)
-    //   0x00FA:        "Tempo di Allarme" — alarm-cycle/siren duration, global (minutes,
-    //                  0-63; 0 = siren outputs never fire)
+    // captures and cross-checked field by field against the Bentel Security Suite
+    // "Areas" page (issue #113; see PROTOCOL.md 9.2 for the original Suite UI names):
+    //   0x00DC-0x00DF: exit delay P1-P4 (seconds)
+    //   0x00E0-0x00E3: entry delay P1-P4 (seconds)
+    //   0x00E4-0x00E7: scheduler advance-warning time P1-P4 (minutes)
+    //   0x00E8-0x00EB: And-Zone time P1-P4 (15-second steps)
+    //   0x00EC-0x00EF: And-Code time P1-P4 (seconds)
+    //   0x00F8:        patrol time, global (minutes)
+    //   0x00FA:        alarm-cycle/siren duration, global (minutes, 0-63;
+    //                  0 = siren outputs never fire)
     uint8_t rx[255];
     int count = this->read_register_(0x00DC, 0x1F, rx, 300);
     if (count < 6 + 31) {
@@ -1422,10 +1421,10 @@ bool BentelKyo::read_partition_names_() {
   // at 0x1750-0x17CF instead of 0x2BA0-0x2C1F.
   static const uint16_t BASE_ADDRS_NONG[] = {0x2BA0, 0x2BE0};
   static const uint16_t BASE_ADDRS_32G[] = {0x1750, 0x1790};
-  // KYO8 2.04: the area names sit at 0x32D0 (PERIMETRO, VOLUMETRICI, Area 03, Area 04),
-  // right after the 8 zone names (issue #113). KYO4/8 have 4 partitions (see the
-  // ranges_kyo8 table in decode_event_code_), so a single 64-byte block covers them;
-  // 0x3310+ holds keypad labels, which is why only 4 slots are read.
+  // KYO8 2.04: the area names sit at 0x32D0, right after the 8 zone names (issue #113,
+  // confirmed against the panel keypad). KYO4/8 have 4 partitions (see the ranges_kyo8
+  // table in decode_event_code_), so a single 64-byte block covers them; 0x3310+ holds
+  // keypad labels, which is why only 4 slots are read.
   static const uint16_t BASE_ADDRS_KYO8[] = {0x32D0};
   const uint16_t *bases = this->select_name_bases_(BASE_ADDRS_NONG, BASE_ADDRS_32G, BASE_ADDRS_KYO8);
   bool kyo8 = this->is_kyo8_family_();

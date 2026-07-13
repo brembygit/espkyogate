@@ -1127,11 +1127,16 @@ bool BentelKyo::read_zone_config_() {
   if (count < 6 + 64) {
     ESP_LOGW(TAG, "Zone config read at 0x%04X failed: got %d bytes", BASE_ADDRS[blk], count);
   } else {
+    // KYO8 2.04 prefixes the block with a 4-byte header, so zone records start at 0x00A3
+    // instead of 0x009F (issue #113 validation: with the shift, zones 1-4 land in area 1
+    // and zones 5-6 in area 2, matching the panel's PERIMETRO/VOLUMETRICI assignment;
+    // without it zone 1 reads area 0x00 = "None").
+    int base = 6 + (this->is_kyo8_family_() ? 4 : 0);
     for (int i = 0; i < 16; i++) {
       int z = blk * 16 + i;
       if (z >= this->max_zones_)
         break;
-      int offset = 6 + (i * 4);
+      int offset = base + (i * 4);
       this->zone_type_raw_[z] = rx[offset];
       this->zone_enrolled_[z] = (rx[offset + 1] == 0x01);
       this->zone_area_mask_[z] = rx[offset + 2];
@@ -1224,6 +1229,14 @@ bool BentelKyo::read_zone_esn_next_() {
   // Reads ONE zone per call (one per update cycle) to avoid blocking the main loop.
   // USB capture shows panel takes ~1s to respond to 0xC0xx reads (EEPROM access).
   // Returns true when all zones have been read.
+  if (this->is_kyo8_family_()) {
+    // The 0xC045/0xC0B1 ESN windows read unrelated config data on KYO8 2.04 — a panel
+    // with no wireless receiver returned non-empty "serials", with area-timer bytes
+    // (0F/1E/14) visible in the higher slots (issue #113 validation). Skip; the ESN
+    // sensors stay at "N/A".
+    this->esn_read_index_ = 0;
+    return true;
+  }
   int i = this->esn_read_index_;
 
   if (i >= this->max_zones_) {
@@ -1289,24 +1302,26 @@ void BentelKyo::read_partition_config_() {
   // Bytes 16-23: siren duration (1 byte per partition)
   if (this->is_kyo8_family_()) {
     // KYO8 2.04 keeps the area timers right after the zone-config block, not at 0x016F
-    // (which returns an index table on this firmware). Layout confirmed by a differential
-    // capture on issue #113 (P1 exit 30s->25s flipped exactly 0x00DC from 1E to 19):
+    // (which returns an index table on this firmware). Layout confirmed by differential
+    // captures on issue #113 (P1 exit 30s->25s flipped exactly 0x00DC; siren 3min->2min
+    // flipped exactly 0x00FA):
     //   0x00DC-0x00DF: exit delay P1-P4 (seconds)
     //   0x00E0-0x00E3: entry delay P1-P4 (seconds)
     //   0x00E4-0x00E7: pre-alarm P1-P4 (minutes, not currently exposed)
-    // The siren-duration byte has not been identified yet — it stays at its default and
-    // the siren text sensor publishes "N/A" on this family.
+    //   0x00FA:        siren duration, single global byte (minutes)
     uint8_t rx[255];
-    int count = this->read_register_(0x00DC, 0x08, rx, 300);
-    if (count < 6 + 8) {
+    int count = this->read_register_(0x00DC, 0x1F, rx, 300);
+    if (count < 6 + 31) {
       ESP_LOGW(TAG, "KYO8 timer read at 0x00DC failed: got %d bytes", count);
       return;
     }
+    uint8_t siren_min = rx[6 + 0x1E];  // 0x00FA
     for (int i = 0; i < KYO_PARTITIONS_8; i++) {
       this->partition_exit_delay_[i] = rx[6 + i];
       this->partition_entry_delay_[i] = rx[6 + 4 + i];
-      ESP_LOGD(TAG, "Partition %d: entry=%ds, exit=%ds", i + 1,
-               this->partition_entry_delay_[i], this->partition_exit_delay_[i]);
+      this->partition_siren_timer_[i] = siren_min;
+      ESP_LOGD(TAG, "Partition %d: entry=%ds, exit=%ds, siren=%dmin", i + 1,
+               this->partition_entry_delay_[i], this->partition_exit_delay_[i], siren_min);
     }
     return;
   }
@@ -1333,6 +1348,13 @@ bool BentelKyo::read_keyfob_esn_next_() {
   // Keyfob ESN at 0xC0B1: 3 bytes per keyfob, 16 slots
   // Reads ONE keyfob per call (one per update cycle) to avoid blocking the main loop.
   // Returns true when all keyfobs have been read.
+  if (this->is_kyo8_family_()) {
+    // Same as zone ESNs: the 0xC0B1 window reads unrelated config data on KYO8 2.04
+    // (issue #113 validation — all 16 slots "populated" on a panel with zero keyfobs).
+    // Skip; the keyfob ESN sensors stay at "N/A".
+    this->keyfob_read_index_ = 0;
+    return true;
+  }
   int i = this->keyfob_read_index_;
 
   if (i >= KYO_MAX_KEYFOBS) {
@@ -1680,9 +1702,10 @@ void BentelKyo::publish_text_sensors_() {
         if (idx >= KYO_MAX_KEYFOBS) continue;
         entry.sensor->publish_state(this->keyfob_name_[idx].empty() ? "N/A" : this->keyfob_name_[idx]);
         break;
-      // On the KYO8 family entry/exit delays are decoded from 0x00DC for partitions 1-4
-      // (issue #113); higher partition slots and the siren duration (byte not yet
-      // identified) publish "N/A" so a default 0 isn't mistaken for a real value.
+      // On the KYO8 family the timers are decoded from the 0x00DC block for partitions
+      // 1-4 (issue #113): entry/exit in seconds, siren duration in minutes (one global
+      // byte at 0x00FA, published on each partition slot). Higher partition slots
+      // publish "N/A" so a default 0 isn't mistaken for a real value.
       case TEXT_PARTITION_ENTRY_DELAY:
         if (idx >= KYO_MAX_PARTITIONS) continue;
         entry.sensor->publish_state(this->is_kyo8_family_() && idx >= KYO_PARTITIONS_8
@@ -1697,8 +1720,13 @@ void BentelKyo::publish_text_sensors_() {
         break;
       case TEXT_PARTITION_SIREN_TIMER:
         if (idx >= KYO_MAX_PARTITIONS) continue;
-        entry.sensor->publish_state(this->is_kyo8_family_() ? "N/A"
-                                                            : to_string(this->partition_siren_timer_[idx]));
+        if (this->is_kyo8_family_()) {
+          entry.sensor->publish_state(idx >= KYO_PARTITIONS_8
+                                          ? "N/A"
+                                          : to_string(this->partition_siren_timer_[idx]) + "min");
+        } else {
+          entry.sensor->publish_state(to_string(this->partition_siren_timer_[idx]));
+        }
         break;
       case TEXT_PARTITION_NAME:
         if (idx >= KYO_MAX_PARTITIONS) continue;

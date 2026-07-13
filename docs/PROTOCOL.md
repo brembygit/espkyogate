@@ -745,8 +745,19 @@ Other KYO8 2.04 findings from the same scan:
   | `0x00E4`-`0x00E7` | Pre-alarm time, partitions 1-4 | minutes |
   | `0x00E8`-`0x00EB` | Unconfirmed (matches configured anti-zone count) | — |
   | `0x00EC`-`0x00EF` | Unconfirmed (matches configured anti-code time) | seconds |
+  | `0x00FA` | Siren duration, single global byte (differential: 3min -> 2min flipped only this byte; `0x00F9` may be a related alarm time) | minutes |
 
-  The siren-duration byte has not been identified yet.
+- The zone-config block at `0x009F` starts with a 4-byte header on KYO8: zone
+  records begin at `0x00A3` (validated: with the shift, zones land in the areas
+  configured on the panel; without it zone 1 reads area `0x00`).
+- The `0xC045`/`0xC0B1` ESN windows read unrelated config data on KYO8 — a panel
+  with no wireless receiver and zero keyfobs returned non-empty "serials", with
+  area-timer bytes visible in the higher slots. The wireless-enrollment storage,
+  if this hardware variant has one, has not been located.
+- Entering the installer menu on the keypad makes the panel stop answering the
+  serial bus entirely (polls time out until the menu is exited), so programming
+  mode cannot be detected via a register read on this firmware — the
+  communication-status sensor is the only observable signal.
 
 ---
 

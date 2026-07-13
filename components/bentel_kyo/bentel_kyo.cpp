@@ -1130,9 +1130,13 @@ bool BentelKyo::read_zone_config_() {
     // KYO8 2.04 prefixes the block with a 4-byte header, so zone records start at 0x00A3
     // instead of 0x009F (issue #113 validation: with the shift, every zone lands in the
     // area configured on the panel; without it zone 1 reads area 0x00 = "None").
-    // KYO8 record bytes, cross-checked against the Bentel Security Suite zone page:
-    // [0]=type, [1]=unknown (always 0x00, NOT a wireless-enrolled flag), [2]=area mask,
-    // [3]=alarm-cycle count (0-14; 0x0F = repetitive/unlimited).
+    // KYO8 record bytes, confirmed by Suite-vs-scan differentials on firmware 2.04:
+    // [0]=type in the low bits (0x00 Instant, 0x01 Delayed, 0x02 Path) plus wiring/balance
+    // in the high bits (Normally Closed = 0x00, Normally Open = +0x08), [1]=zone attribute
+    // bitmask (Internal = 0x20; 0x00 = no attributes set — NOT a wireless-enrolled flag),
+    // [2]=area mask, [3]=alarm-cycle count (0-14; 0x0F = repetitive/unlimited).
+    // Note the layout differs from KYO32 (section 10.1 of PROTOCOL.md), where [1] is the
+    // enrolled flag and [3] is the attribute byte.
     // The header also means only 15 full records fit in the 64 returned bytes — cap the
     // loop so a hypothetical >8-zone KYO8 read can never index past the buffer.
     bool kyo8 = this->is_kyo8_family_();

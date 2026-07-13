@@ -758,9 +758,17 @@ Other KYO8 2.04 findings from the same scan:
 - The zone-config block at `0x009F` starts with a 4-byte header on KYO8: zone
   records begin at `0x00A3` (validated: with the shift, zones land in the areas
   configured on the panel; without it zone 1 reads area `0x00`). Record layout,
-  cross-checked against the Suite zone page: byte 0 = type, byte 1 = unknown
-  (always `0x00`, not a wireless-enrolled flag), byte 2 = area mask, byte 3 =
-  alarm-cycle count (0-14; `0x0F` = repetitive/unlimited; `Cicli` in the Suite).
+  confirmed by Suite-vs-scan differentials:
+
+  | Offset | Field | Values |
+  |--------|-------|--------|
+  | +0 | Type + balance | Low bits: `0x00` Instant, `0x01` Delayed, `0x02` Path. High bits: wiring/balance, Normally Closed = `0x00`, Normally Open = `+0x08` (differential: NO→NC flipped `08`→`00`) |
+  | +1 | Attribute bitmask | Internal (`Interna`) = `0x20` (differential: toggling it flipped `00`→`20`); `0x00` = no attributes set. Previously suspected to be an enrolled flag — it is not |
+  | +2 | Area mask | `0x01` = area 1 … `0x08` = area 4 |
+  | +3 | Alarm cycles | 0-14; `0x0F` = repetitive/unlimited (`Cicli` in the Suite) |
+
+  Note the layout differs from KYO32 (section 10.1), where +1 is the
+  wireless-enrolled flag and +3 is the attribute byte.
 - The `0xC045`/`0xC0B1` ESN windows read unrelated config data on KYO8 — a panel
   with no wireless receiver and zero keyfobs returned non-empty "serials", with
   area-timer bytes visible in the higher slots. The wireless-enrollment storage,

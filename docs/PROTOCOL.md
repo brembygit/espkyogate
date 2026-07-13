@@ -735,21 +735,28 @@ Other KYO8 2.04 findings from the same scan:
   `0x1503` (status flags) reads ASCII text, `0x016F` (partition timers) reads a
   6-byte-record index table, and `0x01DF`-`0x021E` is all zeros.
 - The area timers (`Tempi -> Aree`) live at `0x00DC`, immediately after the
-  zone-config block. Layout confirmed by differential capture (changing P1 exit
-  30s -> 25s flipped exactly `0x00DC` from `1E` to `19`):
+  zone-config block. Layout pinned by differential captures (single-byte flips
+  for exit delay, siren duration and patrol time) and cross-checked field by
+  field against the Bentel Security Suite 5.5.4 "Aree" page:
 
-  | Address | Field | Unit |
-  |---------|-------|------|
-  | `0x00DC`-`0x00DF` | Exit delay, partitions 1-4 | seconds |
-  | `0x00E0`-`0x00E3` | Entry delay, partitions 1-4 | seconds |
-  | `0x00E4`-`0x00E7` | Pre-alarm time, partitions 1-4 | minutes |
-  | `0x00E8`-`0x00EB` | Unconfirmed (matches configured anti-zone count) | — |
-  | `0x00EC`-`0x00EF` | Unconfirmed (matches configured anti-code time) | seconds |
-  | `0x00FA` | Siren duration, single global byte (differential: 3min -> 2min flipped only this byte; `0x00F9` may be a related alarm time) | minutes |
+  | Address | Suite field | Unit |
+  |---------|-------------|------|
+  | `0x00DC`-`0x00DF` | T. Uscita (exit delay), partitions 1-4 | seconds |
+  | `0x00E0`-`0x00E3` | T. Ingresso (entry delay), partitions 1-4 | seconds |
+  | `0x00E4`-`0x00E7` | T. Preavviso (scheduler advance warning), partitions 1-4 | minutes |
+  | `0x00E8`-`0x00EB` | T. And Zone, partitions 1-4 | 15-second steps |
+  | `0x00EC`-`0x00EF` | T. Cod And, partitions 1-4 | seconds |
+  | `0x00F8` | Tempo di Ronda (patrol time) | minutes |
+  | `0x00FA` | Tempo di Allarme (alarm-cycle/siren duration, 0-63; 0 = siren outputs never fire) | minutes |
+
+  Still unidentified: `0x00F0`-`0x00F7` (`1E` x8) and `0x00F9`.
 
 - The zone-config block at `0x009F` starts with a 4-byte header on KYO8: zone
   records begin at `0x00A3` (validated: with the shift, zones land in the areas
-  configured on the panel; without it zone 1 reads area `0x00`).
+  configured on the panel; without it zone 1 reads area `0x00`). Record layout,
+  cross-checked against the Suite zone page: byte 0 = type, byte 1 = unknown
+  (always `0x00`, not a wireless-enrolled flag), byte 2 = area mask, byte 3 =
+  alarm-cycle count "Cicli" (0-14; `0x0F` = "Ripetitivo"/unlimited).
 - The `0xC045`/`0xC0B1` ESN windows read unrelated config data on KYO8 — a panel
   with no wireless receiver and zero keyfobs returned non-empty "serials", with
   area-timer bytes visible in the higher slots. The wireless-enrollment storage,
@@ -758,6 +765,13 @@ Other KYO8 2.04 findings from the same scan:
   serial bus entirely (polls time out until the menu is exited), so programming
   mode cannot be detected via a register read on this firmware — the
   communication-status sensor is the only observable signal.
+- Verification technique: the official Bentel Security Suite can be run against
+  the panel *through* the ESP32 using a TCP-serial passthrough (e.g. the
+  esphome-stream-server external component with the UART left untouched while no
+  TCP client is connected), disabling this component's polling switch for the
+  session. A virtual COM port mapped to the ESP32's TCP port lets the Suite read
+  and write the full panel configuration with no B-Mod cable, enabling
+  Suite-vs-memory-scan differentials for any register.
 
 ---
 

@@ -1680,27 +1680,53 @@ bool BentelKyo::read_event_log_next_() {
 // one 64-byte read per update() cycle, as hex + printable ASCII rows (16 bytes per row,
 // matching the 16-byte name-slot size so label tables line up visually).
 //
-// Regions scanned (v3 — the label table is fully mapped; only the timer block remains):
-// - 0x009F + 0x00DF: contiguous coverage of 0x009F-0x011E. The v2 scan started at 0x00DF
-//   and missed the 3-byte blind spot 0x00DC-0x00DE, only reachable through the tail of the
-//   0x009F zone-config read — a differential capture (P1 exit 30s->25s) changed nothing in
-//   0x00DF+, placing P1 exit exactly in that blind spot. Working layout hypothesis:
-//   exit P1-P4 @ 0x00DC, entry P1-P4 @ 0x00E0, pre-alarm @ 0x00E4, then 05x4 and 0Ax4.
+// Regions scanned (v5 — full sweep of the documented config space, for cross-model
+// comparison; the goal is a complete map on every model, not just KYO8):
+// - 0x0000-0x09FF: core configuration. Covers everything in PROTOCOL.md section 10 up to
+//   the end of event routing (0x0921) — zone config, keyfob buttons, timers, enrollment,
+//   partition/code config, panel options, ARC phone numbers — plus the undocumented
+//   0x0000-0x009E head. On KYO8 this includes the whole 9.2 timer/telephony block.
+// - 0x14C0-0x153F: runtime status region (partition status 0x14EC/0x1502, status flags
+//   0x1503-0x1509). Bytes here change with panel state, so diffs are only meaningful for
+//   config-differential captures if the panel state is otherwise unchanged.
+// - 0x2BA0-0x381F: all name tables on both map families (KYO32 non-G: 0x2BA0-0x347F,
+//   sections 10.2/10.6-10.13; KYO8 2.04: 0x3250-0x37EF, section 9.2).
+// Deliberately excluded: the event log (0x0D27-0x1426, dumpable via the read_event_log
+// button) and the slow 0xC0xx EEPROM windows (~1.5s per read, already handled by the
+// ESN readers). Reads of addresses a model doesn't answer for fail after the timeout and
+// are logged and skipped — the scan always runs to completion.
 bool BentelKyo::memory_scan_next_() {
-  static const uint16_t SCAN_ADDRS[] = {
-      // zone-config block + timer region, contiguous (covers the 0x00DC-0x00DE blind spot)
-      0x009F, 0x00DF,
+  struct ScanRange {
+    uint16_t start;
+    uint8_t chunks;  // number of 64-byte reads
   };
-  static const int SCAN_CHUNKS = sizeof(SCAN_ADDRS) / sizeof(SCAN_ADDRS[0]);
+  static const ScanRange SCAN_RANGES[] = {
+      {0x0000, 40},  // 0x0000-0x09FF core config
+      {0x14C0, 2},   // 0x14C0-0x153F status region
+      {0x2BA0, 50},  // 0x2BA0-0x381F name tables
+  };
+  static const int SCAN_RANGE_COUNT = sizeof(SCAN_RANGES) / sizeof(SCAN_RANGES[0]);
+
+  int total_chunks = 0;
+  for (int r = 0; r < SCAN_RANGE_COUNT; r++)
+    total_chunks += SCAN_RANGES[r].chunks;
 
   int chunk = this->memory_scan_chunk_index_;
-  if (chunk >= SCAN_CHUNKS) {
+  if (chunk >= total_chunks) {
     ESP_LOGI(TAG, "Memory scan complete — please attach the SCAN lines above to issue #113");
     return true;
   }
 
-  uint16_t addr = SCAN_ADDRS[chunk];
-  ESP_LOGI(TAG, "Memory scan chunk %d/%d (0x%04X)", chunk + 1, SCAN_CHUNKS, addr);
+  uint16_t addr = 0;
+  int rem = chunk;
+  for (int r = 0; r < SCAN_RANGE_COUNT; r++) {
+    if (rem < SCAN_RANGES[r].chunks) {
+      addr = SCAN_RANGES[r].start + (uint16_t) (rem * 64);
+      break;
+    }
+    rem -= SCAN_RANGES[r].chunks;
+  }
+  ESP_LOGI(TAG, "Memory scan chunk %d/%d (0x%04X)", chunk + 1, total_chunks, addr);
 
   uint8_t rx[255];
   int count = this->read_register_(addr, 0x3F, rx, 500);

@@ -238,6 +238,7 @@ void BentelKyo::read_event_log() {
 
 void BentelKyo::memory_scan() {
   ESP_LOGI(TAG, "Memory scan requested — dumping unmapped config regions (issue #113)...");
+  ESP_LOGW(TAG, "Scan output contains personal data (event log, code/phone names, access PINs) — redact before sharing");
   this->memory_scan_pending_ = true;
   this->memory_scan_chunk_index_ = 0;
 }
@@ -1713,7 +1714,7 @@ bool BentelKyo::memory_scan_next_() {
 
   int chunk = this->memory_scan_chunk_index_;
   if (chunk >= total_chunks) {
-    ESP_LOGI(TAG, "Memory scan complete — please attach the SCAN lines above to issue #113");
+    ESP_LOGI(TAG, "Memory scan complete — redact personal data, then attach the SCAN lines above to issue #113");
     return true;
   }
 

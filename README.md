@@ -499,6 +499,7 @@ button:
 | `reread_config` | Re-read zone configuration, names, serial numbers from panel |
 | `reset_alarms` | Reset alarm memory on the panel |
 | `read_event_log` | Read panel event log (256 entries) with decoded event names and dump to ESPHome logs |
+| `memory_scan` | Debug: dump the panel's configuration memory to the ESPHome log for protocol mapping |
 | `arm_all_away` | Arm all registered partitions in Away mode |
 | `arm_all_home` | Arm all registered partitions in Home/Stay mode |
 | `arm_all_night` | Arm all registered partitions in Night mode |
@@ -535,6 +536,38 @@ Event [253]: 01-03-2026 11:36  Disarm Partition n.1
 ```
 
 <img src="images/ESPHomeLogs.png" alt="ESPHome Event Logs" width="600px"/>
+
+### Memory Scan (debug)
+
+The `memory_scan` button is a protocol-mapping aid: it reads the documented
+configuration address ranges (92 x 64-byte chunks, about one minute at the
+default 500ms polling) and dumps them to the ESPHome log as hex+ASCII `SCAN`
+lines. It only issues the same `0xF0` read command used for normal
+configuration reads — nothing is written to the panel, and status polling keeps
+running between chunks, so the panel stays reachable throughout.
+
+```yaml
+button:
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: memory_scan
+    name: "Memory Scan (Debug)"
+```
+
+Press the button once with the panel idle, then copy the `SCAN 0x....` lines
+from the log. Typical use is comparing two dumps taken before and after
+changing a single panel setting to locate the register it lives in
+(see `docs/PROTOCOL.md`).
+
+**The dump contains personal data** — the event log, code and phone-book
+names, access PINs and phone numbers. Redact those lines before attaching a
+scan to a public issue (the log prints a reminder at scan start and end).
+
+Notes:
+- On KYO8 the first chunk (`0x0000`) is not readable and logs a warning — this
+  is expected and harmless.
+- Individual chunk failures are logged and skipped; the scan always runs to
+  completion.
 
 ### Arm Preset Buttons
 

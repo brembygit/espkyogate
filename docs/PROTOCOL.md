@@ -766,11 +766,14 @@ Other KYO8 2.04 findings from the same scan:
   exposes 3: outputs 1-2 = 30s/30s, output 3 = 3s/3s, slots 4-5 at defaults).
 
   The last unidentified run, `0x00F0`-`0x00F7` (`1E` x8), matches no Suite
-  field on KYO8. Given the block layout (partition 1-4 timers immediately
-  before), the likely explanation is exit + entry delay slots for partitions
-  5-8 — present in the bigger KYO models' map, unused at their default (30s)
-  on KYO8, and not testable there since the KYO8 UI only exposes 4 areas. A
-  differential capture on a KYO32 could confirm.
+  field on KYO8. An earlier guess (exit/entry slots for partitions 5-8) was
+  **ruled out** by a full config scan of a KYO32G 2.13 (section 10.28): that
+  model stores all eight areas' timers together at `0x016F` (areas 5-8
+  included), and its 32-zone config table fills `0x009F`-`0x011E`, so on the
+  KYO32 family `0x00F0`-`0x00F7` is zone-config data, not timers. The KYO8
+  compact timer block is therefore its own layout; these 8 bytes are most
+  likely two further per-area (1-4) timer types at their 30s default, still
+  unmapped for lack of a Suite field to flip.
 
 - The zone-config block at `0x009F` starts with a 4-byte header on KYO8: zone
   records begin at `0x00A3` (validated: with the shift, zones land in the areas

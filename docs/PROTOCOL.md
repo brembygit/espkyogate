@@ -805,6 +805,29 @@ Other KYO8 2.04 findings from the same scan:
   and write the full panel configuration with no B-Mod cable, enabling
   Suite-vs-memory-scan differentials for any register.
 
+### 9.3 KYO8 2.04 memory map (full-sweep reference)
+
+A full sweep of the readable address ranges on a KYO8 2.04 (same range set used
+for the KYO32G, ~1 minute with normal polling still running) surfaced these
+regions beyond the ones mapped above:
+
+| Range | Content |
+|-------|---------|
+| `0x0000`-`0x003F` | **Not readable** — the panel answers the `0xF0` read with a short 19-byte reply instead of a full response. The same window reads normally on KYO32G 2.13 |
+| `0x0040`-`0x00A2` | 9-byte records with `0x0F` at offset 0, back-to-back (11 slots; the last one overlaps the 4-byte zone-config header at `0x009F`) — plausibly per-code config records; unmapped |
+| `0x08BB`-`0x09FF` | Sequential 3-byte slot table, first byte an index incrementing `0x01`, `0x02`, … (past `0x6B` where the sweep window ends); purpose unknown |
+| `0x1490`-`0x15FF` (approx.) | Second copy of the code names (`Codice 4` observed at `0x14C0`, implying `Codice 1` at `0x1490`) — distinct from the `0x3490` table the component reads; which copy the keypad uses is unknown |
+| `0x2BA0`-`~0x2E05` | Event log — timestamped records (`DD MM YY HH mm` + event code) matching the keypad's `Registro Eventi`. Note this address is the partition-name table on KYO32 non-G (section 10.10) and string ROM on KYO32G (section 10.28) |
+| `0x2E60`-`0x2E8F` | Misc telephony/config bytes, including an access PIN stored as plain ASCII around `0x2E76` |
+| `0x2E90`-`0x2EA6` | DTMF/keypad character table (`, * # ABCDEF`) |
+| `0x2EA7`-`0x30BB` | Dense binary tables, unmapped |
+| `0x30C0`-`0x381F` | LCD menu strings followed by the user-label tables of section 9.2 |
+
+**Privacy note for scan logs:** a KYO8 sweep captures personal data — event-log
+timestamps, code and phone-book names, an ASCII PIN near `0x2E76` and BCD phone
+digits near `0x0109`. Redact these regions before attaching scan output to a
+public issue.
+
 ---
 
 ## 10. Configuration Register Map

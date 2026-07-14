@@ -748,12 +748,29 @@ Other KYO8 2.04 findings from the same scan:
   | `0x00E8`-`0x00EB` | And-Zone time, partitions 1-4 | 15-second steps |
   | `0x00EC`-`0x00EF` | And-Code time, partitions 1-4 | seconds |
   | `0x00F8` | Patrol time (global) | minutes |
+  | `0x00F9` | Handsfree/speakerphone timeout (global) | — |
   | `0x00FA` | Alarm-cycle/siren duration (global, 0-63; 0 = siren outputs never fire) | minutes |
+  | `0x00FF`-`0x0103` | Output monostable ON time, outputs 1-5 | seconds |
+  | `0x0104`-`0x0108` | Output monostable OFF time, outputs 1-5 | seconds |
+  | `0x0112` | Dial attempts | count |
+  | `0x0119` | Remote-assistance ring count | count |
 
-  Original labels in the (Italian-only) Suite UI, top to bottom: `T. Uscita`,
-  `T. Ingresso`, `T. Preavviso`, `T. And Zone`, `T. Cod And`, `Tempo di Ronda`,
-  `Tempo di Allarme`. Still unidentified: `0x00F0`-`0x00F7` (`1E` x8) and
-  `0x00F9`.
+  Original labels in the (Italian-only) Suite UI: `T. Uscita`, `T. Ingresso`,
+  `T. Preavviso`, `T. And Zone`, `T. Cod And`, `Tempo di Ronda`,
+  `Timeout Vivavoce`, `Tempo di Allarme`, `N. Squilli Teleassistenza`. The
+  telephony fields were pinned by a batched differential (two fields changed
+  with distinct values, one scan): handsfree timeout 3→5 flipped `0x00F9`,
+  ring count 3→4 flipped `0x0119`; `0x0112` matches the configured dial
+  attempts, and the repeating `1E 1E 03 03 03` pattern at `0x00FF`-`0x0108`
+  matches the outputs' monostable ON/OFF times (5 slots, the KYO8 panel
+  exposes 3: outputs 1-2 = 30s/30s, output 3 = 3s/3s, slots 4-5 at defaults).
+
+  The last unidentified run, `0x00F0`-`0x00F7` (`1E` x8), matches no Suite
+  field on KYO8. Given the block layout (partition 1-4 timers immediately
+  before), the likely explanation is exit + entry delay slots for partitions
+  5-8 — present in the bigger KYO models' map, unused at their default (30s)
+  on KYO8, and not testable there since the KYO8 UI only exposes 4 areas. A
+  differential capture on a KYO32 could confirm.
 
 - The zone-config block at `0x009F` starts with a 4-byte header on KYO8: zone
   records begin at `0x00A3` (validated: with the shift, zones land in the areas

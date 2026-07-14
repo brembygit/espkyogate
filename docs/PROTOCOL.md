@@ -1537,8 +1537,11 @@ labels rather than the configured names.
 | `0x01E6` | Panel mode | Inside the zone-enrollment table `0x019E`-`0x01F7` (reads `FF 00`, the 2nd byte of a zone record) | Permanent false `programming=YES` |
 | `0x1503` | Status flags | `FF` padding just after partition status `0x14EC`/`0x1502` (reads `00 00 FF 00 FF`) | Permanent false `trouble=YES` |
 
-The correct KYO32G panel-mode / trouble registers, if they exist, need a
-programming-mode differential to locate. Real faults still surface through the
+The correct KYO32G panel-mode / trouble registers, if they exist, cannot be
+located with a programming-mode differential: on KYO32G — exactly as observed
+on KYO8 2.04 — entering the installer menu silences the serial bus entirely,
+so programming mode is only observable as a communication loss (the
+communication-status sensor). Real faults still surface through the
 `WARNING_*` binary sensors parsed from the live status poll, so gating these two
 reads loses no genuine fault detection.
 

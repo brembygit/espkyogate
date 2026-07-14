@@ -1478,8 +1478,10 @@ void BentelKyo::read_panel_mode_() {
     // shows the 32-zone config table filling 0x009F-0x011E and the zone-enrollment table at
     // 0x019E-0x01F7, so 0x01E6 lands inside enrollment (reads FF 00 = the 2nd byte of a zone
     // record). Against the {0x11,0x10} idle baseline that is a permanent false programming=YES.
-    // Leave panel_programming_mode_ at its idle default; the correct KYO32G register, if any,
-    // still needs a programming-mode differential capture to locate.
+    // Leave panel_programming_mode_ at its idle default. A programming-mode differential can't
+    // locate the real register either: on KYO32G (as on KYO8) entering the installer menu
+    // silences the serial bus entirely, so the communication-status sensor is the only
+    // observable signal for that state.
     return;
   }
   uint8_t rx[255];

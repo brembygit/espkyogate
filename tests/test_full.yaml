@@ -202,6 +202,10 @@ button:
     bentel_kyo_id: kyo
     type: read_event_log
     name: "Read Event Log"
+  - platform: bentel_kyo
+    bentel_kyo_id: kyo
+    type: memory_scan
+    name: "Memory Scan"
 
   # Arming
   - platform: bentel_kyo

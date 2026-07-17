@@ -50,6 +50,18 @@ class BentelKyoReadEventLogButton : public button::Button, public Component {
   BentelKyo *parent_{nullptr};
 };
 
+class BentelKyoMemoryScanButton : public button::Button, public Component {
+ public:
+  void set_parent(BentelKyo *parent) { this->parent_ = parent; }
+
+  void press_action() override {
+    this->parent_->memory_scan();
+  }
+
+ protected:
+  BentelKyo *parent_{nullptr};
+};
+
 class BentelKyoArmAllButton : public button::Button, public Component {
  public:
   void set_parent(BentelKyo *parent) { this->parent_ = parent; }

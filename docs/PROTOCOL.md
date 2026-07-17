@@ -704,6 +704,130 @@ are not a single uniform offset from the non-G map, so each table is mapped
 individually. The component selects these addresses when the detected model is
 KYO32G (see `read_*_names_()` in `bentel_kyo.cpp`).
 
+### 9.2 KYO8 name table layout (firmware 2.04)
+
+The KYO4/8/8G family uses a third, distinct label-table layout, mapped via an
+on-device memory scan on a KYO8 2.04 (issue #113). The non-G addresses respond
+but land on the LCD menu-string ROM (`0x30C0`-`0x324F`) or unrelated data. The
+user-label table is one contiguous block at `0x3250`-`0x37EF`, in a different
+entity order than the non-G map:
+
+| Table | KYO8 base | Count | Default labels |
+|-------|-----------|-------|----------------|
+| Zone names | `0x3250` | 8 | `Zona N` |
+| Partition (area) names | `0x32D0` | 4 | `Area 0N` |
+| Keypad names | `0x3310` | 8 | `Tastiera 0N` |
+| Reader names | `0x3390` | 16 | `Lettore NN` |
+| Code names | `0x3490` | 24 | `Codice N` |
+| Keyfob (digital key) names | `0x3610` | 16 | `Attivatore N` |
+| Output names | `0x3710` | 5 | `Uscita N` |
+| Phone number names | `0x3760` | 8 | `Numero N` |
+
+The table ends with a single generic `Chiave` slot at `0x37E0` followed by ROM
+date-format strings (`GMA`/`MGA`/`AMG`). Entity counts follow the KYO8 hardware
+(4 partitions, 5 outputs); "attivatore" is Bentel's term for the digital keys
+presented to readers, matching the non-G "digital key names" table by relative
+position and count.
+
+Other KYO8 2.04 findings from the same scan:
+
+- The KYO32 fixed registers do not apply: `0x01E6` (panel mode) reads `00 00`,
+  `0x1503` (status flags) reads ASCII text, `0x016F` (partition timers) reads a
+  6-byte-record index table, and `0x01DF`-`0x021E` is all zeros.
+- The area timers (the keypad's Times -> Areas menu, `Tempi -> Aree`) live at
+  `0x00DC`, immediately after the zone-config block. Layout pinned by
+  differential captures (single-byte flips for exit delay, siren duration and
+  patrol time) and cross-checked field by field against the Bentel Security
+  Suite 5.5.4 "Areas" page:
+
+  | Address | Field | Unit |
+  |---------|-------|------|
+  | `0x00DC`-`0x00DF` | Exit delay, partitions 1-4 | seconds |
+  | `0x00E0`-`0x00E3` | Entry delay, partitions 1-4 | seconds |
+  | `0x00E4`-`0x00E7` | Scheduler advance-warning time, partitions 1-4 | minutes |
+  | `0x00E8`-`0x00EB` | And-Zone time, partitions 1-4 | 15-second steps |
+  | `0x00EC`-`0x00EF` | And-Code time, partitions 1-4 | seconds |
+  | `0x00F8` | Patrol time (global) | minutes |
+  | `0x00F9` | Handsfree/speakerphone timeout (global) | — |
+  | `0x00FA` | Alarm-cycle/siren duration (global, 0-63; 0 = siren outputs never fire) | minutes |
+  | `0x00FF`-`0x0103` | Output monostable ON time, outputs 1-5 | seconds |
+  | `0x0104`-`0x0108` | Output monostable OFF time, outputs 1-5 | seconds |
+  | `0x0112` | Dial attempts | count |
+  | `0x0119` | Remote-assistance ring count | count |
+
+  Original labels in the (Italian-only) Suite UI: `T. Uscita`, `T. Ingresso`,
+  `T. Preavviso`, `T. And Zone`, `T. Cod And`, `Tempo di Ronda`,
+  `Timeout Vivavoce`, `Tempo di Allarme`, `N. Squilli Teleassistenza`. The
+  telephony fields were pinned by a batched differential (two fields changed
+  with distinct values, one scan): handsfree timeout 3→5 flipped `0x00F9`,
+  ring count 3→4 flipped `0x0119`; `0x0112` matches the configured dial
+  attempts, and the repeating `1E 1E 03 03 03` pattern at `0x00FF`-`0x0108`
+  matches the outputs' monostable ON/OFF times (5 slots, the KYO8 panel
+  exposes 3: outputs 1-2 = 30s/30s, output 3 = 3s/3s, slots 4-5 at defaults).
+
+  The last unidentified run, `0x00F0`-`0x00F7` (`1E` x8), matches no Suite
+  field on KYO8. An earlier guess (exit/entry slots for partitions 5-8) was
+  **ruled out** by a full config scan of a KYO32G 2.13: that model stores all
+  eight areas' timers together at `0x016F` (areas 5-8 included, read and
+  correct), and its 32-zone config table fills `0x009F`-`0x011E`, so on the
+  KYO32 family `0x00F0`-`0x00F7` is zone-config data, not timers. The KYO8
+  compact timer block is therefore its own layout; these 8 bytes are most
+  likely two further per-area (1-4) timer types at their 30s default, still
+  unmapped for lack of a Suite field to flip.
+
+- The zone-config block at `0x009F` starts with a 4-byte header on KYO8: zone
+  records begin at `0x00A3` (validated: with the shift, zones land in the areas
+  configured on the panel; without it zone 1 reads area `0x00`). Record layout,
+  confirmed by Suite-vs-scan differentials:
+
+  | Offset | Field | Values |
+  |--------|-------|--------|
+  | +0 | Type + balance | Low bits: `0x00` Instant, `0x01` Delayed, `0x02` Path. High bits: wiring/balance, Normally Closed = `0x00`, Normally Open = `+0x08` (differential: NO→NC flipped `08`→`00`) |
+  | +1 | Attribute bitmask | Internal (`Interna`) = `0x20` (differential: toggling it flipped `00`→`20`); `0x00` = no attributes set. Previously suspected to be an enrolled flag — it is not |
+  | +2 | Area mask | `0x01` = area 1 … `0x08` = area 4 |
+  | +3 | Alarm cycles | 0-14; `0x0F` = repetitive/unlimited (`Cicli` in the Suite) |
+
+  Note the layout differs from KYO32 (section 10.1), where +1 is the
+  wireless-enrolled flag and +3 is the attribute byte.
+- The `0xC045`/`0xC0B1` ESN windows read unrelated config data on KYO8 — a panel
+  with no wireless receiver and zero keyfobs returned non-empty "serials", with
+  area-timer bytes visible in the higher slots. The wireless-enrollment storage,
+  if this hardware variant has one, has not been located.
+- Entering the installer menu on the keypad makes the panel stop answering the
+  serial bus entirely (polls time out until the menu is exited), so programming
+  mode cannot be detected via a register read on this firmware — the
+  communication-status sensor is the only observable signal.
+- Verification technique: the official Bentel Security Suite can be run against
+  the panel *through* the ESP32 using a TCP-serial passthrough (e.g. the
+  esphome-stream-server external component with the UART left untouched while no
+  TCP client is connected), disabling this component's polling switch for the
+  session. A virtual COM port mapped to the ESP32's TCP port lets the Suite read
+  and write the full panel configuration with no B-Mod cable, enabling
+  Suite-vs-memory-scan differentials for any register.
+
+### 9.3 KYO8 2.04 memory map (full-sweep reference)
+
+A full sweep of the readable address ranges on a KYO8 2.04 (same range set used
+for the KYO32G, ~1 minute with normal polling still running) surfaced these
+regions beyond the ones mapped above:
+
+| Range | Content |
+|-------|---------|
+| `0x0000`-`0x003F` | **Not readable** — the panel answers the `0xF0` read with a short 19-byte reply instead of a full response. The same window reads normally on KYO32G 2.13 |
+| `0x0040`-`0x00A2` | 9-byte records with `0x0F` at offset 0, back-to-back (11 slots; the last one overlaps the 4-byte zone-config header at `0x009F`) — plausibly per-code config records; unmapped |
+| `0x08BB`-`0x09FF` | Sequential 3-byte slot table, first byte an index incrementing `0x01`, `0x02`, … (past `0x6B` where the sweep window ends); purpose unknown |
+| `0x1490`-`0x15FF` (approx.) | Second copy of the code names (`Codice 4` observed at `0x14C0`, implying `Codice 1` at `0x1490`) — distinct from the `0x3490` table the component reads; which copy the keypad uses is unknown |
+| `0x2BA0`-`~0x2E05` | Event log — timestamped records (`DD MM YY HH mm` + event code) matching the keypad's `Registro Eventi`. Note this address is the partition-name table on KYO32 non-G (section 10.10) and string ROM on KYO32G (section 10.28) |
+| `0x2E60`-`0x2E8F` | Misc telephony/config bytes, including an access PIN stored as plain ASCII around `0x2E76` |
+| `0x2E90`-`0x2EA6` | DTMF/keypad character table (`, * # ABCDEF`) |
+| `0x2EA7`-`0x30BB` | Dense binary tables, unmapped |
+| `0x30C0`-`0x381F` | LCD menu strings followed by the user-label tables of section 9.2 |
+
+**Privacy note for scan logs:** a KYO8 sweep captures personal data — event-log
+timestamps, code and phone-book names, an ASCII PIN near `0x2E76` and BCD phone
+digits near `0x0109`. Redact these regions before attaching scan output to a
+public issue.
+
 ---
 
 ## 10. Configuration Register Map

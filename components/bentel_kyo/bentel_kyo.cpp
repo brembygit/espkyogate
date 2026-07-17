@@ -1473,6 +1473,17 @@ void BentelKyo::read_panel_mode_() {
     // the continuous F0 68 status poll.
     return;
   }
+  if (this->alarm_model_ == AlarmModel::KYO_32G) {
+    // 0x01E6 is not the panel-mode register on KYO32G. A full config scan of a KYO32G 2.13
+    // shows the 32-zone config table filling 0x009F-0x011E and the zone-enrollment table at
+    // 0x019E-0x01F7, so 0x01E6 lands inside enrollment (reads FF 00 = the 2nd byte of a zone
+    // record). Against the {0x11,0x10} idle baseline that is a permanent false programming=YES.
+    // Leave panel_programming_mode_ at its idle default. A programming-mode differential can't
+    // locate the real register either: on KYO32G (as on KYO8) entering the installer menu
+    // silences the serial bus entirely, so the communication-status sensor is the only
+    // observable signal for that state.
+    return;
+  }
   uint8_t rx[255];
   int count = this->read_register_(0x01E6, 0x02, rx, 300);
   if (count < 6 + 2) {
@@ -1495,6 +1506,14 @@ void BentelKyo::read_status_flags_() {
     // 0x1503 reads ASCII text, not trouble bit-flags, on KYO8 2.04, which the "any byte
     // != 0xFF" rule reads as a permanent false trouble=YES (issue #113). Leave
     // trouble_active_ at its no-trouble default until the real register is located.
+    return;
+  }
+  if (this->alarm_model_ == AlarmModel::KYO_32G) {
+    // 0x1503 is not the trouble-flags register on KYO32G. The 2.13 scan shows this address
+    // sits in the FF padding just after the partition-status block (0x14EC/0x1502 on the G),
+    // reading 00 00 FF 00 FF; the "any byte != 0xFF" rule turns that into a permanent false
+    // trouble=YES. Leave trouble_active_ at its no-trouble default. Real faults still surface
+    // through the WARNING_* binary sensors parsed from the live status poll.
     return;
   }
   uint8_t rx[255];

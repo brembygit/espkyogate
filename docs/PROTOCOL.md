@@ -1494,6 +1494,57 @@ KyoUnit during upload/download operations. Subject to the same
 | `0xC045` | 96B | Zone ESN storage (32 × 3 bytes) | Yes |
 | `0xC0B1` | 48B | Keyfob ESN storage (16 × 3 bytes) | Yes |
 
+### 10.28 KYO32G 2.13 Configuration Map (full-scan reference)
+
+First complete scan of a KYO32G's configuration space (firmware `KYO32G  2.13`),
+captured with the `memory_scan` debug button. Sections 10.1-10.27 above describe
+the KYO32/KYO32M (non-G); the differences below apply to the G and were all
+cross-checked against the live entities the component publishes.
+
+**Active configuration** (read correctly by the component's KYO32G path):
+
+| Content | KYO32G address (observed) | Notes |
+|---------|---------------------------|-------|
+| Zone config | `0x009F` (32 × 4) | Same base as non-G; byte 0 = type, byte 2 = area mask (validated against `Zone N Partition` sensors) |
+| Timers | `0x016F` | All eight areas' entry/exit + siren, areas 5-8 included and correct |
+| Partition names | `0x1750` (8 × 16) | |
+| Zone names | zones 17-32 observed at `0x1AB0`-`0x1BAF`; the 1-16 table precedes it (~`0x19B0`) | |
+| Code names | `0x1BB0` (24 × 16) | |
+| Keyfob / digital-key names | `0x1D30` (16 × 16) | |
+| Output names | `0x1E30` (16 × 16) | |
+| Zone ESN | `0xC045`+ | |
+| Keyfob ESN | `0xC0B1`+ | |
+
+These active name tables differ from the non-G addresses in 10.2 / 10.6-10.13
+(`0x2Exx` / `0x3xxx`). On the G those non-G addresses instead fall inside a
+built-in string ROM (below), so the component uses model-specific bases.
+
+**Built-in string ROM `0x2BA0`-`0x3820`.** Holds the panel's default entity
+labels (`Reader NN`, `Zone N`, `User Code N`, `Key/Card N`, `Output N`,
+`Telephone numb.N`) followed by the full UI menu/option string set (language
+menu, `PROGRAMMING`, `Ready`, `Times`, `Codes`, `Instant`/`Delayed`/`Path`,
+`NC`/`NO`/`BAL`/`DBAL`/`Cycles`, weekday abbreviations, trouble names, …). It is
+distinct from the active, user-editable name tables above, which carry the
+panel's localized defaults (e.g. Italian `Zona N`). A zero-config read of the
+non-G name addresses lands in this ROM, which is why it returns clean English
+labels rather than the configured names.
+
+**Two register mismappings on the G** (gated off for `KYO_32G` in
+`read_panel_mode_` / `read_status_flags_`):
+
+| Register | Non-G meaning | On KYO32G 2.13 | Effect if read |
+|----------|---------------|----------------|----------------|
+| `0x01E6` | Panel mode | Inside the zone-enrollment table `0x019E`-`0x01F7` (reads `FF 00`, the 2nd byte of a zone record) | Permanent false `programming=YES` |
+| `0x1503` | Status flags | `FF` padding just after partition status `0x14EC`/`0x1502` (reads `00 00 FF 00 FF`) | Permanent false `trouble=YES` |
+
+The correct KYO32G panel-mode / trouble registers, if they exist, cannot be
+located with a programming-mode differential: on KYO32G — exactly as observed
+on KYO8 2.04 — entering the installer menu silences the serial bus entirely,
+so programming mode is only observable as a communication loss (the
+communication-status sensor). Real faults still surface through the
+`WARNING_*` binary sensors parsed from the live status poll, so gating these two
+reads loses no genuine fault detection.
+
 ---
 
 ## 11. Known Issues and Unmapped Data

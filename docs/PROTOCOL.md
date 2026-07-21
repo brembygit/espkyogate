@@ -351,12 +351,19 @@ bypassed zones, alarm memory, and tamper memory.
 
 | Model | Address | Command bytes |
 |-------|---------|---------------|
-| KYO32G | `0x1502` | `F0 02 15 12 00 19` |
+| KYO32G / KYO8W | `0x1502` | `F0 02 15 12 00 19` |
 | KYO32 (non-G) | `0x14EC` | `F0 EC 14 12 00 02` |
-| KYO8/4/8G/8W | `0x0E68` | `F0 68 0E 09 00 6F` |
+| KYO8/4/8G | `0x0E68` | `F0 68 0E 09 00 6F` |
 
-Read length byte: `0x12` (19 data bytes) for KYO32-series,
-`0x09` (10 data bytes) for KYO8-series.
+Read length byte: `0x12` (19 data bytes) for the KYO32-series responders
+(KYO32, KYO32G, KYO8W), `0x09` (10 data bytes) for KYO8/4/8G.
+
+Note: despite its 8-zone hardware, the wireless **KYO8W** answers with the
+KYO32-format response and reads partition status at the *KYO32G* register
+`0x1502`, not the non-G `0x14EC` — hardware-confirmed in #109. The KYO32
+non-G register was briefly shared with the G (`0x1502`) after the two commands
+were unified, which left non-G panels stuck reporting all partitions disarmed
+(#118); the addresses are model-specific and must not be merged again.
 
 #### KYO32/32G Response (26 bytes total)
 

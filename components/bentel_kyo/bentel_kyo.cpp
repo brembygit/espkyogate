@@ -17,6 +17,7 @@ namespace bentel_kyo {
 // Static constexpr definitions
 constexpr uint8_t BentelKyo::CMD_GET_SENSOR_STATUS[];
 constexpr uint8_t BentelKyo::CMD_GET_PARTITION_KYO32[];
+constexpr uint8_t BentelKyo::CMD_GET_PARTITION_KYO32G[];
 constexpr uint8_t BentelKyo::CMD_GET_PARTITION_KYO8[];
 constexpr uint8_t BentelKyo::CMD_GET_VERSION[];
 constexpr uint8_t BentelKyo::CMD_RESET_ALARMS[];
@@ -148,9 +149,15 @@ void BentelKyo::loop() {
         if (this->alarm_model_ == AlarmModel::KYO_8 || this->alarm_model_ == AlarmModel::KYO_4 ||
             this->alarm_model_ == AlarmModel::KYO_8G) {
           cmd = CMD_GET_PARTITION_KYO8; cmd_len = sizeof(CMD_GET_PARTITION_KYO8);
-        } else {
-          // KYO32 and KYO32G use the same partition status command
+        } else if (this->alarm_model_ == AlarmModel::KYO_32) {
+          // KYO32 non-G reads partition status at 0x14EC. Using the KYO32G 0x1502
+          // register here returns FF padding, which the parser reads as all-disarmed
+          // (issue #118, regression from unifying the two commands). KYO8W is NOT in
+          // this branch: it was hardware-confirmed on the 0x1502 register in #109.
           cmd = CMD_GET_PARTITION_KYO32; cmd_len = sizeof(CMD_GET_PARTITION_KYO32);
+        } else {
+          // KYO32G and KYO8W both read partition status at 0x1502.
+          cmd = CMD_GET_PARTITION_KYO32G; cmd_len = sizeof(CMD_GET_PARTITION_KYO32G);
         }
         this->send_command_async_(cmd, cmd_len, 2);
         return;  // Don't update health yet — wait for partition response

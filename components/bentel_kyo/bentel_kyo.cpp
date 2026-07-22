@@ -245,7 +245,8 @@ void BentelKyo::read_event_log() {
 
 void BentelKyo::memory_scan() {
   ESP_LOGI(TAG, "Memory scan requested — dumping unmapped config regions (issue #113)...");
-  ESP_LOGW(TAG, "Scan output contains personal data (event log, code/phone names, access PINs) — redact before sharing");
+  ESP_LOGI(TAG, "Access codes and phone numbers are masked as XX — see is_secret_address_()");
+  ESP_LOGW(TAG, "Still personal: event log entries, and the zone/code/phone names you chose — redact before sharing");
   this->memory_scan_pending_ = true;
   this->memory_scan_chunk_index_ = 0;
 }
@@ -1722,6 +1723,45 @@ bool BentelKyo::read_event_log_next_() {
 // button) and the slow 0xC0xx EEPROM windows (~1.5s per read, already handled by the
 // ESN readers). Reads of addresses a model doesn't answer for fail after the timeout and
 // are logged and skipped — the scan always runs to completion.
+bool BentelKyo::is_secret_address_(uint16_t address) const {
+  if (this->is_kyo8_family_()) {
+    // KYO8 2.04 keeps its access code as ASCII digits inside 0x2E60-0x2E8F (9.3) and
+    // does not use the KYO32 table below — its 0x019E window holds an unrelated,
+    // still-unidentified 6-byte record structure, so masking by address alone would
+    // hide mapping data on this family while leaving the actual code exposed.
+    return address >= 0x2E60 && address <= 0x2E8F;
+  }
+  return is_kyo32_secret_address_(address);
+}
+
+bool BentelKyo::is_kyo32_secret_address_(uint16_t address) {
+  // Windows the scan masks because they hold credentials rather than layout data.
+  //
+  // 0x019E-0x01FE — user access codes. One 3-byte record per code slot, holding the
+  // code as BCD digits padded with nibble 0xF: a 6-digit code fills the record, a
+  // 4-digit one leaves two 0xF nibbles. Unset slots read as their own slot number
+  // (0x00 0x06 0xFF = "0006"), which is the factory default for that slot. PROTOCOL.md
+  // 10.3 previously described this window as wireless zone-enrollment ESNs; the
+  // variable padding and a code confirmed in plaintext against a wired-only KYO32G
+  // rule that out (see 10.3). The range is the union of the two KYO32 variants, whose
+  // tables sit 22 bytes apart (0x019E non-G, 0x01B4 on the G).
+  //
+  // 0x02F8-0x03CF — ARC and notification phone numbers (10.24).
+  //
+  // Masking is deliberate rather than a warning: the scan asks users to paste its
+  // output into public issues, and a warning cannot tell them which bytes to remove.
+  //
+  // Both windows are mapped, so the dump loses nothing it exists to find. The one
+  // cost is that on a non-G the union of the two variants also covers 0x01E6-0x01FE,
+  // i.e. panel mode (10.20) and the first 22 bytes of partition config (10.4) —
+  // both documented and both read directly at runtime.
+  //
+  // KYO8W gets this KYO32 range because its config map is assumed to follow the
+  // KYO32 one; that assumption is untested here as everywhere else, so its codes may
+  // sit elsewhere and remain visible.
+  return (address >= 0x019E && address <= 0x01FE) || (address >= 0x02F8 && address <= 0x03CF);
+}
+
 bool BentelKyo::memory_scan_next_() {
   struct ScanRange {
     uint16_t start;
@@ -1769,8 +1809,13 @@ bool BentelKyo::memory_scan_next_() {
     char hex[16 * 3 + 1];
     char ascii[16 + 1];
     for (int i = 0; i < 16; i++) {
-      snprintf(&hex[i * 3], 4, "%02X ", p[i]);
-      ascii[i] = (p[i] >= 0x20 && p[i] <= 0x7E) ? (char) p[i] : '.';
+      if (is_secret_address_(addr + row * 16 + i)) {
+        snprintf(&hex[i * 3], 4, "XX ");
+        ascii[i] = '.';
+      } else {
+        snprintf(&hex[i * 3], 4, "%02X ", p[i]);
+        ascii[i] = (p[i] >= 0x20 && p[i] <= 0x7E) ? (char) p[i] : '.';
+      }
     }
     hex[16 * 3 - 1] = '\0';
     ascii[16] = '\0';

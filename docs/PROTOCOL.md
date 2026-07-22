@@ -1570,7 +1570,7 @@ labels rather than the configured names.
 
 | Register | Non-G meaning | On KYO32G 2.13 | Effect if read |
 |----------|---------------|----------------|----------------|
-| `0x01E6` | Panel mode | Inside the access-code table, which on the G runs to `0x01FE` (10.3) | Permanent false `programming=YES` |
+| `0x01E6` | Panel mode | Inside the access-code table, which on the G runs to `0x01FE` (10.3) | Permanent false `programming=YES`, and the two bytes read are code digits — the read is skipped on KYO32G and KYO8W |
 | `0x1503` | Status flags | `FF` padding just after partition status `0x14EC`/`0x1502` (reads `00 00 FF 00 FF`) | Permanent false `trouble=YES` |
 
 The correct KYO32G panel-mode / trouble registers, if they exist, cannot be

@@ -1481,11 +1481,21 @@ void BentelKyo::read_panel_mode_() {
     // the continuous F0 68 status poll.
     return;
   }
-  if (this->alarm_model_ == AlarmModel::KYO_32G) {
+  if (this->alarm_model_ == AlarmModel::KYO_32G || this->alarm_model_ == AlarmModel::KYO_8W) {
     // 0x01E6 is not the panel-mode register on KYO32G. A full config scan of a KYO32G 2.13
-    // shows the 32-zone config table filling 0x009F-0x011E and the zone-enrollment table at
-    // 0x019E-0x01F7, so 0x01E6 lands inside enrollment (reads FF 00 = the 2nd byte of a zone
-    // record). Against the {0x11,0x10} idle baseline that is a permanent false programming=YES.
+    // shows the 32-zone config table filling 0x009F-0x011E and the access-code table at
+    // 0x01B4-0x01FE (10.3), so 0x01E6 lands inside the code table — the two bytes read are
+    // the tail of one code record and the head of the next.
+    // Against the {0x11,0x10} idle baseline that is a permanent false programming=YES.
+    //
+    // KYO8W is included because its config map is untested and it is known to share the G's
+    // partition-status register (0x1502, hardware-confirmed in #109). If it is G-like here
+    // too, these two bytes are code digits, and suppressing only the ESP_LOGD would not
+    // contain them: the same bytes are published as the panel_mode_raw text sensor and from
+    // there reach the recorder database, entity history and HA diagnostics downloads. Not
+    // reading them is the only place that closes every channel at once. If KYO8W turns out
+    // to follow the non-G map instead, the cost is a panel-mode indicator stuck at its idle
+    // default — visible, reportable and revertible, unlike a code published in a log.
     // Leave panel_programming_mode_ at its idle default. A programming-mode differential can't
     // locate the real register either: on KYO32G (as on KYO8) entering the installer menu
     // silences the serial bus entirely, so the communication-status sensor is the only
@@ -1759,7 +1769,11 @@ bool BentelKyo::is_kyo32_secret_address_(uint16_t address) {
   // KYO8W gets this KYO32 range because its config map is assumed to follow the
   // KYO32 one; that assumption is untested here as everywhere else, so its codes may
   // sit elsewhere and remain visible.
-  return (address >= 0x019E && address <= 0x01FE) || (address >= 0x02F8 && address <= 0x03CF);
+  // The upper bound carries one row of margin past the last record observed (0x01FE on the
+  // G): the table base already moved 22 bytes between the two generations seen so far, so a
+  // bound fitted exactly to them would fail silently on a third. The margin costs the dump
+  // 0x01FF-0x020F, which on a non-G is part of partition config (10.4).
+  return (address >= 0x019E && address <= 0x020F) || (address >= 0x02F8 && address <= 0x03CF);
 }
 
 bool BentelKyo::memory_scan_next_() {
